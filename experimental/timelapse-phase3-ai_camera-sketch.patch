@@ -1,7 +1,7 @@
-*** Phase 2 PROPOSAL ONLY — do NOT apply without Manuel's approval ***
-*** Community repo: lpgamerzockt-ops/centauri-carbon-2-community @ 01d99cd6 (optimierung) ***
-*** Apply target: ELEGOO ai_camera source (github.com/elegooofficial/CentauriCarbon2), via firmware builder — NOT cc2-control/ ***
-*** CC2: no patch required for printer.cfg keys; delay_video per print already in mqtt.c:258-260,290-300 ***
+*** Phase 3 — reference sketch for ELEGOO ai_camera (Manuel approved execute) ***
+*** Integrated parser + overlay: builder/current/components/ai_camera_timelapse/ (apply via apply_overlay.py) ***
+*** Apply remaining hunks below onto vendor CentauriCarbon2 ai_camera sources when rebuilding ai_camera ***
+*** CC2: timelapse.cfg via /api/timelapse/settings; delay_video per print in mqtt.c ***
 
 diff --git a/debugfile/printer.cfg b/debugfile/printer.cfg
 --- a/debugfile/printer.cfg

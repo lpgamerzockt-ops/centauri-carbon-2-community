@@ -18,13 +18,13 @@ Target behaviour (unchanged resolution):
 | x264 preset | `preset` | `video_encoder.cpp` |
 | Paths | `picture_dir`, `video_dir`, `temp_link` | `time_lapse_photo.h` / path validator |
 
-Proposal patch (not applied in this repo’s vendor tree): see project store `timelapse-vorschlag.patch` and analysis in `timelapse-analyse.md` under the agent store `docs/`.
+Reference patch (ELEGOO tree): project store `timelapse-vorschlag.patch`. **Applied integration in this repo:** `builder/current/components/ai_camera_timelapse/` (`timelapse_cfg.c`, overlay sources, `BUILD.md`, `apply_overlay.py`).
 
 Integration path for maintainers:
 
-1. Add `[timelapse]` parser in firmware build (builder/vendor `ai_camera` sources).
-2. Load cfg at `ai_camera` startup; fall back to compile-time defaults when missing.
-3. Ship in a **full Community Firmware** release (e.g. V4.4.x+) with signed artifacts.
+1. Copy overlay onto vendor `ai_camera` with `apply_overlay.py` (see `BUILD.md`).
+2. Link `timelapse_cfg.c`, `timelapse_runtime.c`, `timelapse_path.c`; call `tl_runtime_load("/opt/usr/cfg/timelapse.cfg")` at startup.
+3. Rebuild `/opt/bin/ai_camera` and ship in a **full Community Firmware** release (e.g. V4.4.x+) with signed artifacts — not via `.cc2update` alone.
 
 ## USB storage paths
 

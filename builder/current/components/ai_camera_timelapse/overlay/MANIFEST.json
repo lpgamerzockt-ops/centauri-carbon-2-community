@@ -1,0 +1,7 @@
+{
+  "copy_headers": [
+    "module/camera/timelapse_quality.h",
+    "module/camera/timelapse_path.h",
+    "module/camera/timelapse_runtime.h"
+  ]
+}
