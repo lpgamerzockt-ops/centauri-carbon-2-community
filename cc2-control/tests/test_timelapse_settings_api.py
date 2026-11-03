@@ -71,9 +71,9 @@ with tempfile.TemporaryDirectory(prefix="cc2-timelapse-settings-") as temporary:
                 "level": "3.1",
                 "pic_max_size": 307200,
                 "keep_source_jpegs": False,
-                "picture_dir": "/opt/usr/picture/",
-                "video_dir": "/opt/usr/video/",
-                "temp_link": "/tmp/pic_link",
+            "picture_dir": "/mnt/exUDISK/timelapse/picture/",
+            "video_dir": "/mnt/exUDISK/timelapse/video/",
+            "temp_link": "/tmp/pic_link",
             }
         ).encode()
         # POST without idle mqtt may return 409 — acceptable; write via direct file for parse test
@@ -93,14 +93,15 @@ with tempfile.TemporaryDirectory(prefix="cc2-timelapse-settings-") as temporary:
             "level: 3.1\n"
             "pic_max_size: 307200\n"
             "keep_source_jpegs: False\n"
-            "picture_dir: /opt/usr/picture/\n"
-            "video_dir: /opt/usr/video/\n"
+            "picture_dir: /mnt/exUDISK/timelapse/picture/\n"
+            "video_dir: /mnt/exUDISK/timelapse/video/\n"
             "temp_link: /tmp/pic_link\n",
             encoding="ascii",
         )
         with urllib.request.urlopen(endpoint, timeout=1) as response:
             data = json.load(response)
         assert data["output_fps"] == 24 and data["bit_rate"] == 5000000
+        assert data["picture_dir"].startswith("/mnt/exUDISK/")
         assert "[timelapse]" in cfg.read_text(encoding="ascii")
         print("PASS: timelapse settings GET reads /opt/usr/cfg-style file via --timelapse-settings")
     finally:

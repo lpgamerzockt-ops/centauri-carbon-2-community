@@ -243,7 +243,7 @@ request body, so a browser receives the error instead of a reset connection.
 ## Timelapse settings (printer file)
 
 - `GET /api/timelapse/settings` returns the current `[timelapse]` section from `/opt/usr/cfg/timelapse.cfg` (defaults when missing). `firmware_support` is `false` until a firmware build reads the file.
-- `POST /api/timelapse/settings` accepts JSON with the same fields; requires an idle printer (`409` otherwise). Validates paths under `/opt/usr/` (and `/tmp/` for the temp symlink). Does not change live capture until Phase 3 firmware.
+- `POST /api/timelapse/settings` accepts JSON with the same fields; requires an idle printer (`409` otherwise). Validates paths under `/opt/usr/`, under **`/mnt/exUDISK/…`** (USB stick mount used for G-code storage; requires a subdirectory, not the mount root alone), and `/tmp/` for the temp symlink. Does not change live capture until Phase 3 firmware.
 
 ## Timelapse print option
 

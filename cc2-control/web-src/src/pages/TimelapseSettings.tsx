@@ -8,8 +8,12 @@ import {
   DEFAULT_TIMELAPSE,
   loadTimelapseSettings,
   saveTimelapseSettings,
+  TIMELAPSE_USB_PICTURE,
+  TIMELAPSE_USB_VIDEO,
+  validateTimelapseForm,
   type TimelapseSettings,
 } from '@/lib/timelapse-settings'
+import { request } from '@/lib/api'
 import { openSettings } from '@/lib/state'
 
 const PRESETS = ['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow']
@@ -31,16 +35,24 @@ const Field = ({ label, htmlFor, children }: { label: Key; htmlFor?: string; chi
 export const TimelapseSettingsPage = () => {
   const [form, setForm] = useState<TimelapseSettings>(DEFAULT_TIMELAPSE)
   const [busy, setBusy] = useState(false)
+  const [usbMounted, setUsbMounted] = useState(false)
 
   useEffect(() => {
     void loadTimelapseSettings().then(data => {
       if (data) setForm(data)
     })
+    void request<{ usb?: { available?: boolean } }>('/api/gcode-files')
+      .then(data => setUsbMounted(data.usb?.available === true))
+      .catch(() => setUsbMounted(false))
   }, [])
 
   const patch = (partial: Partial<TimelapseSettings>) => setForm(f => ({ ...f, ...partial }))
 
   const save = async () => {
+    if (!validateTimelapseForm(form)) {
+      notify(t('timelapse.path_invalid'), 'error')
+      return
+    }
     setBusy(true)
     try {
       await saveTimelapseSettings({
@@ -194,6 +206,20 @@ export const TimelapseSettingsPage = () => {
         <span class="text-sm">{t('timelapse.keep_source_jpegs')}</span>
       </div>
       <h3 class="mb-2 mt-3.5 text-base font-semibold">{t('timelapse.storage')}</h3>
+      <p class="mb-2 text-xs text-muted">{t('timelapse.usb_hint')}</p>
+      <p class="mb-2 text-xs text-amber">{t('timelapse.usb_risk')}</p>
+      {usbMounted ? (
+        <div class="mb-2">
+          <Button
+            variant="ghost"
+            class="h-auto px-2 py-1 text-xs"
+            disabled={busy}
+            onClick={() => patch({ picture_dir: TIMELAPSE_USB_PICTURE, video_dir: TIMELAPSE_USB_VIDEO })}
+          >
+            {t('timelapse.use_usb_paths')}
+          </Button>
+        </div>
+      ) : null}
       <Field label="timelapse.picture_dir" htmlFor="tl-pdir">
         <Input
           id="tl-pdir"

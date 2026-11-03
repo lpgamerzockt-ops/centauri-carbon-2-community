@@ -8,6 +8,8 @@
  * Stock ai_camera does not consume this file until a custom firmware build wires it. */
 #define TIMELAPSE_CFG_MAX 8192
 #define TIMELAPSE_PATH_MAX 128
+/* Must match default GCODE_USB_ROOT in main.c (/mnt/exUDISK); override via --gcode-usb is not reflected here. */
+#define TIMELAPSE_USB_MOUNT_PREFIX "/mnt/exUDISK/"
 
 typedef struct {
     char recording_mode[32];
@@ -57,11 +59,17 @@ static int timelapse_prefix_ok(const char *path, const char *prefix) {
     return path && strncmp(path, prefix, n) == 0 && path[n] != '\0';
 }
 
+static int timelapse_under_usb_mount(const char *path) {
+    if (!timelapse_prefix_ok(path, TIMELAPSE_USB_MOUNT_PREFIX)) return 0;
+    const char *rest = path + strlen(TIMELAPSE_USB_MOUNT_PREFIX);
+    return rest && *rest;
+}
+
 static int timelapse_validate_storage_path(const char *path, int temp_link) {
     if (!path || !*path || strlen(path) >= TIMELAPSE_PATH_MAX) return 0;
     if (!timelapse_path_chars_ok(path) || timelapse_has_dotdot(path)) return 0;
     if (temp_link) return timelapse_prefix_ok(path, "/tmp/") || timelapse_prefix_ok(path, "/opt/usr/");
-    return timelapse_prefix_ok(path, "/opt/usr/");
+    return timelapse_prefix_ok(path, "/opt/usr/") || timelapse_under_usb_mount(path);
 }
 
 static int timelapse_mode_ok(const char *mode) {
@@ -247,7 +255,8 @@ static void timelapse_settings_get(int fd) {
         "\"recording_mode\":\"%s\",\"width\":%d,\"height\":%d,\"camera_fps\":%d,\"output_fps\":%d,"
         "\"bit_rate\":%d,\"crf\":%d,\"preset\":\"%s\",\"tune\":\"%s\",\"profile\":\"%s\",\"level\":\"%s\","
         "\"pic_max_size\":%d,\"keep_source_jpegs\":%s,"
-        "\"picture_dir\":\"%s\",\"video_dir\":\"%s\",\"temp_link\":\"%s\"}\n",
+        "\"picture_dir\":\"%s\",\"video_dir\":\"%s\",\"temp_link\":\"%s\","
+        "\"usb_storage_root\":\"/mnt/exUDISK/\"}\n",
         loaded ? "true" : "false", cc2_timelapse_settings_file, rm, s.width, s.height, s.camera_fps, s.output_fps,
         s.bit_rate, s.crf, pr, tu, pf, lv, s.pic_max_size, s.keep_source_jpegs ? "true" : "false", pd, vd, tl);
     respond(fd, loaded ? 200 : 503, loaded ? "OK" : "Service Unavailable", "application/json; charset=utf-8", body,

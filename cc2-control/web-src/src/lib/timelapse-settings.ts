@@ -5,6 +5,7 @@ export type TimelapseSettings = {
   loaded: boolean
   firmware_support: boolean
   path: string
+  usb_storage_root?: string
   recording_mode: string
   width: number
   height: number
@@ -43,6 +44,26 @@ export const DEFAULT_TIMELAPSE: TimelapseSettings = {
   picture_dir: '/opt/usr/picture/',
   video_dir: '/opt/usr/video/',
   temp_link: '/tmp/pic_link',
+}
+
+/** Matches backend TIMELAPSE_USB_MOUNT_PREFIX / GCODE_USB_ROOT in main.c */
+export const TIMELAPSE_USB_ROOT = '/mnt/exUDISK/'
+
+export const TIMELAPSE_USB_PICTURE = `${TIMELAPSE_USB_ROOT}timelapse/picture/`
+export const TIMELAPSE_USB_VIDEO = `${TIMELAPSE_USB_ROOT}timelapse/video/`
+
+export function timelapseStoragePathOk(path: string, tempLink: boolean): boolean {
+  if (!path || path.includes('..') || path.includes('//')) return false
+  if (tempLink) return path.startsWith('/tmp/') || path.startsWith('/opt/usr/')
+  return path.startsWith('/opt/usr/') || (path.startsWith(TIMELAPSE_USB_ROOT) && path.length > TIMELAPSE_USB_ROOT.length)
+}
+
+export function validateTimelapseForm(form: Pick<TimelapseSettings, 'picture_dir' | 'video_dir' | 'temp_link'>): boolean {
+  return (
+    timelapseStoragePathOk(form.picture_dir, false) &&
+    timelapseStoragePathOk(form.video_dir, false) &&
+    timelapseStoragePathOk(form.temp_link, true)
+  )
 }
 
 export async function fetchTimelapseSettings(): Promise<TimelapseSettings> {
