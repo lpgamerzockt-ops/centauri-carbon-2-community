@@ -13,7 +13,8 @@
  * The Canvas reports each tray's filament and a status: 0 no filament at the
  * tray's feeder, 1 inserted and pre-loaded, 2 feeding the extruder. Inserting
  * filament or changing a tray's filament on the touchscreen opens a question in
- * the web UI: which spool is this? The tray stays unbound until it is answered;
+ * the web UI after the tray has reported filament continuously for 15 s (same delay
+ * as taking a spool back when a tray stays empty): which spool is this? The tray stays unbound until it is answered;
  * what it extrudes meanwhile is kept and charged to the spool that is chosen.
  * A tray that empties while it feeds a print (status 2 to 0) has run out: once
  * the printer has moved on, its spool is set to zero. A tray that stays empty
@@ -31,6 +32,7 @@
 #define SPOOL_JOB_MAX 128        /* bytes of a print's file name kept in the log */
 #define SPOOLS_FILE_MAX (256 * 1024)
 #define SPOOL_ABSENT_MS 15000LL  /* an empty tray this long has had its spool taken out */
+#define SPOOL_PRESENT_MS 15000LL /* tray must report filament this long before an insert question */
 #define SPOOL_ACCEPT_MS 30000LL  /* after an assignment the tray's new filament data is the spool's */
 #define SPOOL_END_MS 8000LL      /* keep counting this long after the printer reports the end */
 #define SPOOL_SAVE_MS 120000LL
@@ -73,7 +75,7 @@ typedef struct {
     long long question_since;
     double question_mm;             /* extruded from this tray while the question was open */
     char question_job[SPOOL_JOB_MAX + 1];
-    long long absent_ms, runout_ms, accept_ms; /* monotonic; not saved */
+    long long absent_ms, runout_ms, accept_ms, present_ms; /* monotonic; not saved */
 } spool_slot;
 
 /* The print being counted. A segment is one tray's usage while its spool stays the
@@ -487,22 +489,26 @@ static void spools_canvas(const mqtt_client *mqtt, long long now) {
         if (!s->seen.have) { s->seen = *t; spools_dirty = 1; continue; } /* first report: nothing happened */
         int was = s->seen.status != 0;
         if (was && !present) {
+            s->present_ms = 0;
             /* Feeding filament that ends at the tray has run out; unloaded filament was taken out. */
             if (s->seen.status == 2 && s->spool[0] && spools.job.active) { if (!s->runout_ms) s->runout_ms = now; }
             else if (!s->absent_ms) s->absent_ms = now;
             s->seen.status = 0;
             spools_dirty = 1;
         } else if (!was && present) {
-            /* Filament inserted asks every time, however soon: another spool goes in within seconds, and the
-             * tray keeps reporting the filament it had until someone edits it. The question suggests the
-             * spool that was there. A spool that ran out is empty, whatever comes in after it. */
-            if (s->runout_ms) spools_runout(i);
-            else if (s->spool[0] || s->question) spools_release(i, 1, "removed");
-            spools_ask(i, 1);
-            s->absent_ms = s->runout_ms = 0;
-            s->seen = *t;
-            spools_dirty = 1;
+            /* Debounce insert detection (symmetric to SPOOL_ABSENT_MS): flickering tray status must not
+             * reopen the spool question on every 0→1 edge (Canvas slot 1 false-empty loops). */
+            if (!s->present_ms) s->present_ms = now;
+            if (now - s->present_ms >= SPOOL_PRESENT_MS) {
+                if (s->runout_ms) spools_runout(i);
+                else if (s->spool[0] || s->question) spools_release(i, 1, "removed");
+                spools_ask(i, 1);
+                s->absent_ms = s->runout_ms = s->present_ms = 0;
+                s->seen = *t;
+                spools_dirty = 1;
+            }
         } else if (!present) {
+            s->present_ms = 0;
             /* Still empty, as after a restart: a spool or question left there goes after the delay. */
             if ((s->spool[0] || s->question) && !s->absent_ms && !s->runout_ms) s->absent_ms = now;
         } else {
@@ -526,7 +532,7 @@ static void spools_verify(const mqtt_client *mqtt) {
     for (int i = 0; i < 4; ++i) {
         spool_slot *s = &spools.slots[i];
         if (!trays[i].have) continue;
-        s->absent_ms = s->runout_ms = 0;
+        s->absent_ms = s->runout_ms = s->present_ms = 0;
         const spool_entry *sp = spool_find(s->spool);
         if (trays[i].status == 0) { if (s->spool[0] || s->question) spools_release(i, 1, "removed"); }
         else if (sp && !spool_fits(sp, &trays[i])) spools_ask(i, 2);

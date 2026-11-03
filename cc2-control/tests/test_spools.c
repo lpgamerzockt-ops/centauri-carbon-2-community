@@ -338,6 +338,8 @@ static void test_questions(void) {
      * reporting the filament it had. The spool that was there is remembered for the answer. */
     tray_status[1] = 0; publish_trays(); tick();
     advance(5000); tray_status[1] = 1; publish_trays(); tick();
+    assert(!spools.slots[1].question);
+    advance(16000); publish_trays(); tick();
     assert(!spools.slots[1].spool[0] && spools.slots[1].question == 1 && !strcmp(spools.slots[1].last, a));
     assign(1, a);
     /* Taken out while idle: back to storage after 15 s. */
@@ -345,6 +347,8 @@ static void test_questions(void) {
     assert(!spools.slots[1].spool[0] && !strcmp(spools.slots[1].last, a) && near(spool_find(a)->remaining, 1000));
     /* New filament: a question, shown to every page through /api/printer. */
     tray_status[1] = 1; tray_type[1] = "PETG"; tray_color[1] = "#FFAA00"; publish_trays(); tick();
+    assert(!spools.slots[1].question);
+    advance(16000); publish_trays(); tick();
     assert(spools.slots[1].question == 1);
     char summary[128]; spools_summary(summary, sizeof(summary));
     assert(strstr(summary, "\"enabled\":true") && strstr(summary, "\"questions\":[1]"));
@@ -378,6 +382,34 @@ static void test_questions(void) {
     puts("PASS: inserted and changed filament asks which spool, usage waits for the answer");
 }
 
+static void test_insert_debounce_slot0(void) {
+    reset();
+    const char *a = create("material=PLA\ncolor=#2850DF\nnet=1000");
+    assign(0, a);
+    enable();
+    tray_status[0] = 0;
+    publish_trays();
+    tick();
+    /* Telemetry flicker on Canvas channel 0 (UI slot 1) must not spam spool questions. */
+    tray_status[0] = 1;
+    publish_trays();
+    tick();
+    advance(3000);
+    tray_status[0] = 0;
+    publish_trays();
+    tick();
+    advance(3000);
+    tray_status[0] = 1;
+    publish_trays();
+    tick();
+    assert(!spools.slots[0].question);
+    advance(16000);
+    publish_trays();
+    tick();
+    assert(spools.slots[0].question == 1 && !strcmp(spools.slots[0].last, a));
+    puts("PASS: slot 0 insert question waits for stable tray present");
+}
+
 static void test_runout(void) {
     reset();
     const char *a = create("material=PLA\ncolor=#2850DF\nnet=1000\nremaining=40");
@@ -401,6 +433,8 @@ static void test_runout(void) {
     /* A new spool in the tray that ran out, before the printer moved on: the old one is still empty, and the
      * new one is asked about although the tray reports the same filament. */
     tray_status[0] = 1; publish_trays(); tick();
+    assert(!spools.slots[0].question);
+    advance(16000); publish_trays(); tick();
     assert(spools.slots[0].question == 1 && !strcmp(spools.slots[0].last, a));
     assign(0, b);
     tray_status[0] = 2; publish_trays();
@@ -408,6 +442,8 @@ static void test_runout(void) {
     tray_status[0] = 0; publish_trays(); tick();
     assert(spools.slots[0].runout_ms && !strcmp(spools.slots[0].spool, b));
     advance(5000); tray_status[0] = 1; publish_trays(); tick();
+    assert(!spools.slots[0].question);
+    advance(16000); publish_trays(); tick();
     assert(near(spool_find(b)->remaining, 0) && !spools.slots[0].spool[0] && spools.slots[0].question == 1 &&
            !strcmp(spools.slots[0].last, b) && spools.log[spools.log_count - 1].kind == 'r');
     b = create("material=PLA\ncolor=#09CC3A\nnet=1000");
@@ -483,6 +519,7 @@ int main(void) {
     test_service_channel();
     test_restart_and_reprint();
     test_questions();
+    test_insert_debounce_slot0();
     test_runout();
     test_external_and_removal();
     test_damaged_file();
