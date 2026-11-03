@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Appearance: Murin themes Murin Carbon, Murin Amber, Murin Slate (Settings → Appearance).
+- Timelapse UI: resolution presets (640×360, 854×480, 1280×720), USB recording toggle, encoder profile/level/tune exposed for all quality presets.
+- Phase 3 firmware integration: `builder/current/components/ai_camera_timelapse/` (`timelapse.cfg` parser, overlay apply script, host test).
+
+### Added (earlier in branch)
+
 - Timelapse settings: quality presets (Low/Medium/High/Custom), free-space warnings on configured paths, USB allowlist under `/mnt/exUDISK/…`, History banner while timelapse video is rendering (`/api/printer` `timelapse_rendering`).
 - Documentation: `docs/TIMELAPSE_PHASE3_FIRMWARE.md` (MP4 encoder changes require rebuilt `ai_camera`, not Control-only `.cc2update`).
 
