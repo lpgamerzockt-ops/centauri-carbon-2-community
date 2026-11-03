@@ -13,6 +13,12 @@ import {
   validateTimelapseForm,
   type TimelapseSettings,
 } from '@/lib/timelapse-settings'
+import {
+  TIMELAPSE_QUALITY_PRESETS,
+  timelapseLowSpace,
+  timelapsePresetFromValues,
+  type TimelapseQualityPreset,
+} from '@/lib/timelapse-presets'
 import { request } from '@/lib/api'
 import { openSettings } from '@/lib/state'
 
@@ -41,8 +47,8 @@ export const TimelapseSettingsPage = () => {
     void loadTimelapseSettings().then(data => {
       if (data) setForm(data)
     })
-    void request<{ usb?: { available?: boolean } }>('/api/gcode-files')
-      .then(data => setUsbMounted(data.usb?.available === true))
+    void request('/api/gcode-files')
+      .then((data: { usb?: { available?: boolean } }) => setUsbMounted(data.usb?.available === true))
       .catch(() => setUsbMounted(false))
   }, [])
 
@@ -81,6 +87,9 @@ export const TimelapseSettingsPage = () => {
     }
   }
 
+  const quality = timelapsePresetFromValues(form)
+  const lowSpace = timelapseLowSpace(form.picture_space, form.video_space)
+
   return (
     <Card>
       <CardHead icon="camera" title="timelapse.title" sub="timelapse.subtitle" />
@@ -100,6 +109,22 @@ export const TimelapseSettingsPage = () => {
       {form.recording_mode === 'realtime_timelapse' && (
         <p class="mb-2 text-xs text-muted cc2-md:col-start-2">{t('timelapse.recording_realtime_help')}</p>
       )}
+      <Field label="timelapse.quality_preset" htmlFor="tl-qual">
+        <Select
+          id="tl-qual"
+          value={quality}
+          onChange={e => {
+            const v = e.currentTarget.value as TimelapseQualityPreset
+            if (v === 'custom') return
+            patch(TIMELAPSE_QUALITY_PRESETS[v])
+          }}
+        >
+          <option value="low">{t('timelapse.quality_low')}</option>
+          <option value="medium">{t('timelapse.quality_medium')}</option>
+          <option value="high">{t('timelapse.quality_high')}</option>
+          <option value="custom">{t('timelapse.quality_custom')}</option>
+        </Select>
+      </Field>
       <h3 class="mb-2 mt-3.5 text-base font-semibold">{t('timelapse.resolution')}</h3>
       <Field label="timelapse.width" htmlFor="tl-w">
         <Input
@@ -143,68 +168,72 @@ export const TimelapseSettingsPage = () => {
           onInput={e => patch({ output_fps: Number(e.currentTarget.value) })}
         />
       </Field>
-      <h3 class="mb-2 mt-3.5 text-base font-semibold">{t('timelapse.encoder')}</h3>
-      <Field label="timelapse.bit_rate" htmlFor="tl-br">
-        <Input
-          id="tl-br"
-          type="number"
-          min={500000}
-          max={20000000}
-          step={100000}
-          value={String(form.bit_rate)}
-          onInput={e => patch({ bit_rate: Number(e.currentTarget.value) })}
-        />
-      </Field>
-      <Field label="timelapse.crf" htmlFor="tl-crf">
-        <Input
-          id="tl-crf"
-          type="number"
-          min={0}
-          max={51}
-          value={String(form.crf)}
-          onInput={e => patch({ crf: Number(e.currentTarget.value) })}
-        />
-      </Field>
-      <Field label="timelapse.preset" htmlFor="tl-preset">
-        <Select id="tl-preset" value={form.preset} onChange={e => patch({ preset: e.currentTarget.value })}>
-          {PRESETS.map(p => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </Select>
-      </Field>
-      <Field label="timelapse.profile" htmlFor="tl-prof">
-        <Select id="tl-prof" value={form.profile} onChange={e => patch({ profile: e.currentTarget.value })}>
-          {PROFILES.map(p => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </Select>
-      </Field>
-      <Field label="timelapse.level" htmlFor="tl-lv">
-        <Input id="tl-lv" value={form.level} onInput={e => patch({ level: e.currentTarget.value })} />
-      </Field>
-      <Field label="timelapse.pic_max_size" htmlFor="tl-pic">
-        <Input
-          id="tl-pic"
-          type="number"
-          min={102400}
-          max={1048576}
-          step={1024}
-          value={String(form.pic_max_size)}
-          onInput={e => patch({ pic_max_size: Number(e.currentTarget.value) })}
-        />
-      </Field>
-      <div class="my-2 flex flex-wrap items-center gap-2 cc2-md:pl-[170px]">
-        <Switch
-          on={form.keep_source_jpegs}
-          label={t('timelapse.keep_source_jpegs')}
-          onClick={() => patch({ keep_source_jpegs: !form.keep_source_jpegs })}
-        />
-        <span class="text-sm">{t('timelapse.keep_source_jpegs')}</span>
-      </div>
+      {quality === 'custom' ? (
+        <>
+          <h3 class="mb-2 mt-3.5 text-base font-semibold">{t('timelapse.encoder')}</h3>
+          <Field label="timelapse.bit_rate" htmlFor="tl-br">
+            <Input
+              id="tl-br"
+              type="number"
+              min={500000}
+              max={20000000}
+              step={100000}
+              value={String(form.bit_rate)}
+              onInput={e => patch({ bit_rate: Number(e.currentTarget.value) })}
+            />
+          </Field>
+          <Field label="timelapse.crf" htmlFor="tl-crf">
+            <Input
+              id="tl-crf"
+              type="number"
+              min={0}
+              max={51}
+              value={String(form.crf)}
+              onInput={e => patch({ crf: Number(e.currentTarget.value) })}
+            />
+          </Field>
+          <Field label="timelapse.preset" htmlFor="tl-preset">
+            <Select id="tl-preset" value={form.preset} onChange={e => patch({ preset: e.currentTarget.value })}>
+              {PRESETS.map(p => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="timelapse.profile" htmlFor="tl-prof">
+            <Select id="tl-prof" value={form.profile} onChange={e => patch({ profile: e.currentTarget.value })}>
+              {PROFILES.map(p => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="timelapse.level" htmlFor="tl-lv">
+            <Input id="tl-lv" value={form.level} onInput={e => patch({ level: e.currentTarget.value })} />
+          </Field>
+          <Field label="timelapse.pic_max_size" htmlFor="tl-pic">
+            <Input
+              id="tl-pic"
+              type="number"
+              min={102400}
+              max={1048576}
+              step={1024}
+              value={String(form.pic_max_size)}
+              onInput={e => patch({ pic_max_size: Number(e.currentTarget.value) })}
+            />
+          </Field>
+          <div class="my-2 flex flex-wrap items-center gap-2 cc2-md:pl-[170px]">
+            <Switch
+              on={form.keep_source_jpegs}
+              label={t('timelapse.keep_source_jpegs')}
+              onClick={() => patch({ keep_source_jpegs: !form.keep_source_jpegs })}
+            />
+            <span class="text-sm">{t('timelapse.keep_source_jpegs')}</span>
+          </div>
+        </>
+      ) : null}
       <h3 class="mb-2 mt-3.5 text-base font-semibold">{t('timelapse.storage')}</h3>
       <p class="mb-2 text-xs text-muted">{t('timelapse.usb_hint')}</p>
       <p class="mb-2 text-xs text-amber">{t('timelapse.usb_risk')}</p>
@@ -244,6 +273,11 @@ export const TimelapseSettingsPage = () => {
           onInput={e => patch({ temp_link: e.currentTarget.value })}
         />
       </Field>
+      {lowSpace ? (
+        <p class="mb-2 text-xs text-amber" role="status">
+          {t('timelapse.low_space_warning')}
+        </p>
+      ) : null}
       <div class="mt-3.5 flex flex-wrap gap-2">
         <Button disabled={busy} onClick={() => void save()}>
           {t('timelapse.save')}

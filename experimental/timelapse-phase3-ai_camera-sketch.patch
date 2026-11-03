@@ -1,0 +1,265 @@
+*** Phase 2 PROPOSAL ONLY — do NOT apply without Manuel's approval ***
+*** Community repo: lpgamerzockt-ops/centauri-carbon-2-community @ 01d99cd6 (optimierung) ***
+*** Apply target: ELEGOO ai_camera source (github.com/elegooofficial/CentauriCarbon2), via firmware builder — NOT cc2-control/ ***
+*** CC2: no patch required for printer.cfg keys; delay_video per print already in mqtt.c:258-260,290-300 ***
+
+diff --git a/debugfile/printer.cfg b/debugfile/printer.cfg
+--- a/debugfile/printer.cfg
++++ b/debugfile/printer.cfg
+@@ -1,3 +1,35 @@
++# ---------------------------------------------------------------------------
++# [timelapse] — PROPOSED (Phase 3 parser in ai_camera / host). Not active until wired.
++#
++# [timelapse]
++# recording_mode: layer_timelapse
++# width: 640
++# height: 360
++# resolution_preset: custom
++# camera_fps: 20
++# output_fps: 30
++# bit_rate: 4000000
++# crf: 20
++# preset: medium
++# tune: stillimage
++# profile: main
++# level: 3.1
++# pic_max_size: 307200
++# keep_source_jpegs: False
++# picture_dir: /opt/usr/picture/
++# video_dir: /opt/usr/video/
++# temp_link: /tmp/pic_link
++#
++# recording_mode values (proposal):
++#   layer_timelapse  — REAL_TIME_SAVE_VIDEO=0 path (JPEG then composite)
++#   realtime_timelapse — maps to compile/runtime VideoFormatConvert path
++# Per-print on/off remains host delay_video via CC2 MQTT 1019/1020, not this section.
++# ---------------------------------------------------------------------------
++
+ # (existing printer.cfg content continues unchanged)
+ 
++diff --git a/elegoo/extras/ai_camera/module/camera/timelapse_path.h b/elegoo/extras/ai_camera/module/camera/timelapse_path.h
++new file mode 100644
++--- /dev/null
++++ b/elegoo/extras/ai_camera/module/camera/timelapse_path.h
+@@ -0,0 +1,32 @@
++/*****************************************************************************
++ * Phase 2 proposal: validate storage paths before use (no .., allowlist prefix).
++ * Phase 3: load picture_dir / video_dir / temp_link from printer.cfg [timelapse].
++ *****************************************************************************/
++#pragma once
++
++#include <stddef.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++/* Returns 1 if path is absolute, under allowed_prefix, contains no "..". */
++int timelapse_path_ok(const char *path, const char *allowed_prefix, size_t max_len);
++
++#ifdef __cplusplus
++}
++#endif
++
+ diff --git a/elegoo/extras/ai_camera/module/camera/timelapse_quality.h b/elegoo/extras/ai_camera/module/camera/timelapse_quality.h
+ new file mode 100644
+ --- /dev/null
+ +++ b/elegoo/extras/ai_camera/module/camera/timelapse_quality.h
+@@ -0,0 +1,78 @@
++/*****************************************************************************
++ * Proposed central timelapse knobs (Phase 2). Phase 3: override from printer.cfg.
++ * Stock: 640x360, camera_fps 20, output_fps 30, bit_rate 2Mbps, ultrafast, no CRF,
++ * PIC 100KiB, paths /opt/usr/picture|video (time_lapse_photo.h:16-18).
++ *****************************************************************************/
++#pragma once
++
++/* recording_mode: 0=layer_timelapse (REAL_TIME_SAVE_VIDEO=0), 1=realtime_timelapse */
++#ifndef TIMELAPSE_RECORDING_MODE
++#define TIMELAPSE_RECORDING_MODE 0
++#endif
++
++#ifndef TIMELAPSE_WIDTH
++#define TIMELAPSE_WIDTH 640
++#endif
++#ifndef TIMELAPSE_HEIGHT
++#define TIMELAPSE_HEIGHT 360
++#endif
++
++#ifndef TIMELAPSE_CAMERA_FPS
++#define TIMELAPSE_CAMERA_FPS 20
++#endif
++#ifndef TIMELAPSE_OUTPUT_FPS
++#define TIMELAPSE_OUTPUT_FPS 30
++#endif
++
++#ifndef TIMELAPSE_BIT_RATE
++#define TIMELAPSE_BIT_RATE 4000000
++#endif
++#ifndef TIMELAPSE_X264_PRESET
++#define TIMELAPSE_X264_PRESET "medium"
++#endif
++#ifndef TIMELAPSE_X264_TUNE
++#define TIMELAPSE_X264_TUNE "stillimage"
++#endif
++#ifndef TIMELAPSE_X264_PROFILE
++#define TIMELAPSE_X264_PROFILE "main"
++#endif
++#ifndef TIMELAPSE_X264_LEVEL
++#define TIMELAPSE_X264_LEVEL "3.1"
++#endif
++#ifndef TIMELAPSE_CRF
++#define TIMELAPSE_CRF 20
++#endif
++#ifndef TIMELAPSE_CRF_ENABLED
++#define TIMELAPSE_CRF_ENABLED 1
++#endif
++
++#ifndef TIMELAPSE_PIC_MAX_SIZE
++#define TIMELAPSE_PIC_MAX_SIZE (300 * 1024)
++#endif
++#ifndef TIMELAPSE_KEEP_SOURCE_JPEGS
++#define TIMELAPSE_KEEP_SOURCE_JPEGS 0
++#endif
++
++/* Storage — must pass timelapse_path_ok() before use at runtime */
++#ifndef TIMELAPSE_PICTURE_DIR
++#define TIMELAPSE_PICTURE_DIR "/opt/usr/picture/"
++#endif
++#ifndef TIMELAPSE_VIDEO_DIR
++#define TIMELAPSE_VIDEO_DIR "/opt/usr/video/"
++#endif
++#ifndef TIMELAPSE_TEMP_LINK
++#define TIMELAPSE_TEMP_LINK "/tmp/pic_link"
++#endif
++
+ diff --git a/elegoo/extras/ai_camera/module/camera/time_lapse_photo.h b/elegoo/extras/ai_camera/module/camera/time_lapse_photo.h
+ --- a/elegoo/extras/ai_camera/module/camera/time_lapse_photo.h
+ +++ b/elegoo/extras/ai_camera/module/camera/time_lapse_photo.h
+@@ -11,9 +11,15 @@
+ #pragma once
+ 
+ #include <iostream>
++#include "timelapse_quality.h"
+ 
+ namespace znp {
+-#define PIC_MAX_SIZE 1 * 100 * 1024
+-#define TIME_LAPSE_PIC_PATH "/opt/usr/picture/"
+-#define TIME_LAPSE_VIDEO_PATH "/opt/usr/video/"
++#ifndef PIC_MAX_SIZE
++#define PIC_MAX_SIZE TIMELAPSE_PIC_MAX_SIZE
++#endif
++#ifndef TIME_LAPSE_PIC_PATH
++#define TIME_LAPSE_PIC_PATH TIMELAPSE_PICTURE_DIR
++#endif
++#ifndef TIME_LAPSE_VIDEO_PATH
++#define TIME_LAPSE_VIDEO_PATH TIMELAPSE_VIDEO_DIR
++#endif
+ 
+ }  // namespace znp
+ diff --git a/elegoo/extras/ai_camera/module/camera/uvc_config_info.h b/elegoo/extras/ai_camera/module/camera/uvc_config_info.h
+ --- a/elegoo/extras/ai_camera/module/camera/uvc_config_info.h
+ +++ b/elegoo/extras/ai_camera/module/camera/uvc_config_info.h
+@@ -13,12 +13,14 @@
+ #include <linux/videodev2.h>
+ #include <iostream>
+ #include <string>
++#include "timelapse_quality.h"
+ 
+-#define CAMERA_FPS 20
+-#define VIDEO_FPS 30
++#define CAMERA_FPS TIMELAPSE_CAMERA_FPS
++#define VIDEO_FPS TIMELAPSE_OUTPUT_FPS
+ #define CAMERA_UART_BOAD 115200
+-#define CAMERA_FARME_WIDTH 640
+-#define CAMERA_FARME_HIGHT 360
++#define CAMERA_FARME_WIDTH TIMELAPSE_WIDTH
++#define CAMERA_FARME_HIGHT TIMELAPSE_HEIGHT
+ #define CAMERA_UART_TIMEOUT_MS 5*1000
+ #define CAMERA_UART_OFFLINE_MS 10*1000
+ diff --git a/elegoo/extras/ai_camera/module/camera/video_list.h b/elegoo/extras/ai_camera/module/camera/video_list.h
+ --- a/elegoo/extras/ai_camera/module/camera/video_list.h
+ +++ b/elegoo/extras/ai_camera/module/camera/video_list.h
+@@ -20,8 +20,10 @@
+ #include <stdlib.h>
+ #include <string.h>
+ }
++#include "timelapse_quality.h"
+ 
+ #define LINK_LIST_LENGTH (4)
+-#define SIZE_OF_FRAME (100*1024)
++#define SIZE_OF_FRAME (TIMELAPSE_PIC_MAX_SIZE)
+ 
+ typedef enum {
+   FRAME_START = 0,  // 数据帧的开始标志
+ diff --git a/elegoo/extras/ai_camera/module/camera/ai_camera.cpp b/elegoo/extras/ai_camera/module/camera/ai_camera.cpp
+ --- a/elegoo/extras/ai_camera/module/camera/ai_camera.cpp
+ +++ b/elegoo/extras/ai_camera/module/camera/ai_camera.cpp
+@@ -393,7 +393,7 @@ void AICamera<CameraT>::TimeLapseComposite(json &params, json &j_respond) {
+         #else
+                 std::string pic_dir = TIME_LAPSE_PIC_PATH + video_dir;
+                 std::string pic_dir_link = "/tmp/pic_link";
+-                std::string cmd = "ln -s \'" + pic_dir + "\'" + " " + pic_dir_link;
++                std::string cmd = "ln -s \'" + pic_dir + "\'" + " " + TIMELAPSE_TEMP_LINK;
+                 SPDLOG_INFO("cmd {}", cmd);
+                 std::system(cmd.c_str());
+ 
+@@ -430,12 +430,14 @@ void AICamera<CameraT>::TimeLapseComposite(json &params, json &j_respond) {
+                 encoder.reset();
+ 
+-                cmd = "rm -rf " + pic_dir_link;
++                cmd = std::string("rm -rf ") + TIMELAPSE_TEMP_LINK;
+                 SPDLOG_INFO("cmd {}", cmd);
+                 std::system(cmd.c_str());
+ 
+-                cmd = "rm -rf \'" + pic_dir + "\'";
+-                SPDLOG_INFO("cmd {}", cmd);
+-                std::system(cmd.c_str());
++                #if !TIMELAPSE_KEEP_SOURCE_JPEGS
++                cmd = "rm -rf \'" + pic_dir + "\'";
++                SPDLOG_INFO("cmd {}", cmd);
++                std::system(cmd.c_str());
++                #endif
+             }
+         #endif
+     else
+ diff --git a/elegoo/extras/ai_camera/module/util/video_encoder.cpp b/elegoo/extras/ai_camera/module/util/video_encoder.cpp
+ --- a/elegoo/extras/ai_camera/module/util/video_encoder.cpp
+ +++ b/elegoo/extras/ai_camera/module/util/video_encoder.cpp
+@@ -28,6 +28,7 @@
+ #include <cstdlib>
+ 
+ #include "video_encoder.h"
++#include "../camera/timelapse_quality.h"
+ #define STB_IMAGE_IMPLEMENTATION
+ #include "stb_image.h"
+ 
+@@ -109,19 +110,23 @@ bool ImageToVideoEncoder::encode_from_directory(
+ #else
+     ptrs_->codec_ctx->width = width_;
+     ptrs_->codec_ctx->height = height_;
+     ptrs_->codec_ctx->time_base = {1, fps_};
+     ptrs_->codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
+-    ptrs_->codec_ctx->bit_rate = 2000000;
++    ptrs_->codec_ctx->bit_rate = TIMELAPSE_BIT_RATE;
+     ptrs_->codec_ctx->gop_size = 30;
+     ptrs_->codec_ctx->max_b_frames = 3;
+ 
+-    av_opt_set(ptrs_->codec_ctx->priv_data, "preset", "ultrafast", 0);
+-    av_opt_set(ptrs_->codec_ctx->priv_data, "tune", "stillimage", 0);
+-    av_opt_set(ptrs_->codec_ctx->priv_data, "profile", "baseline", 0);
+-    av_opt_set(ptrs_->codec_ctx->priv_data, "level", "3.0", 0);
++    av_opt_set(ptrs_->codec_ctx->priv_data, "preset", TIMELAPSE_X264_PRESET, 0);
++    av_opt_set(ptrs_->codec_ctx->priv_data, "tune", TIMELAPSE_X264_TUNE, 0);
++    av_opt_set(ptrs_->codec_ctx->priv_data, "profile", TIMELAPSE_X264_PROFILE, 0);
++    av_opt_set(ptrs_->codec_ctx->priv_data, "level", TIMELAPSE_X264_LEVEL, 0);
++    #if TIMELAPSE_CRF_ENABLED
++    av_opt_set_int(ptrs_->codec_ctx->priv_data, "crf", TIMELAPSE_CRF, 0);
++    #endif
+     av_opt_set(ptrs_->codec_ctx->priv_data, "speed", "10", 0);
+     av_opt_set(ptrs_->codec_ctx->priv_data, "keyint_min", "60", 0);
+     av_opt_set(ptrs_->codec_ctx->priv_data, "sc_threshold", "0", 0);
+ #endif
+
+*** Phase 3 note: wire REAL_TIME_SAVE_VIDEO from TIMELAPSE_RECORDING_MODE in ai_camera.h:35 ***
+*** Phase 3 note: timelapse_path_ok() before any path used in time_lapse_control.cpp SavePicture/Delete ***
+*** CC2 Control: extend print MQTT only after vendor confirms extra config keys — not in this sketch ***

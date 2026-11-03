@@ -242,7 +242,8 @@ request body, so a browser receives the error instead of a reset connection.
 
 ## Timelapse settings (printer file)
 
-- `GET /api/timelapse/settings` returns the current `[timelapse]` section from `/opt/usr/cfg/timelapse.cfg` (defaults when missing). `firmware_support` is `false` until a firmware build reads the file.
+- `GET /api/timelapse/settings` returns the current `[timelapse]` section from `/opt/usr/cfg/timelapse.cfg` (defaults when missing). `firmware_support` is `false` until a firmware build reads the file. Includes `picture_space` / `video_space` (`available_bytes` via `statvfs` when the path exists) and `usb_storage_root`.
+- `GET /api/printer` includes `timelapse_rendering` (true while MQTT observes timelapse generation after method 1051 / machine status 12).
 - `POST /api/timelapse/settings` accepts JSON with the same fields; requires an idle printer (`409` otherwise). Validates paths under `/opt/usr/`, under **`/mnt/exUDISK/…`** (USB stick mount used for G-code storage; requires a subdirectory, not the mount root alone), and `/tmp/` for the temp symlink. Does not change live capture until Phase 3 firmware.
 
 ## Timelapse print option

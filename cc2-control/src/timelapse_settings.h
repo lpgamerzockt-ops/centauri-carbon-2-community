@@ -1,5 +1,8 @@
 #include <limits.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/statvfs.h>
 
 #ifndef CC2_TIMELAPSE_SETTINGS_H
 #define CC2_TIMELAPSE_SETTINGS_H
@@ -63,6 +66,35 @@ static int timelapse_under_usb_mount(const char *path) {
     if (!timelapse_prefix_ok(path, TIMELAPSE_USB_MOUNT_PREFIX)) return 0;
     const char *rest = path + strlen(TIMELAPSE_USB_MOUNT_PREFIX);
     return rest && *rest;
+}
+
+static int timelapse_dir_available_bytes(const char *path, unsigned long long *avail_out) {
+    if (!path || !*path || !avail_out) return 0;
+    char probe[TIMELAPSE_PATH_MAX];
+    snprintf(probe, sizeof(probe), "%.127s", path);
+    size_t len = strlen(probe);
+    while (len > 0 && probe[len - 1] == '/') probe[--len] = 0;
+    while (len > 0) {
+        struct stat st;
+        if (stat(probe, &st) == 0 && S_ISDIR(st.st_mode)) break;
+        char *slash = strrchr(probe, '/');
+        if (!slash || slash == probe) return 0;
+        *slash = 0;
+        len = strlen(probe);
+    }
+    struct statvfs space;
+    if (statvfs(probe, &space) != 0) return 0;
+    unsigned long long unit = space.f_frsize ? space.f_frsize : space.f_bsize;
+    *avail_out = unit * space.f_bavail;
+    return 1;
+}
+
+static void timelapse_space_json(const char *path, char *out, size_t cap) {
+    unsigned long long avail = 0;
+    if (timelapse_dir_available_bytes(path, &avail))
+        snprintf(out, cap, "{\"available_bytes\":%llu}", avail);
+    else
+        snprintf(out, cap, "null");
 }
 
 static int timelapse_validate_storage_path(const char *path, int temp_link) {
@@ -249,6 +281,9 @@ static void timelapse_settings_get(int fd) {
     timelapse_json_escape(s.profile, pf, sizeof(pf));
     timelapse_json_escape(s.level, lv, sizeof(lv));
     timelapse_json_escape(s.tune, tu, sizeof(tu));
+    char pic_space[64], vid_space[64];
+    timelapse_space_json(s.picture_dir, pic_space, sizeof(pic_space));
+    timelapse_space_json(s.video_dir, vid_space, sizeof(vid_space));
     char body[2048];
     int n = snprintf(body, sizeof(body),
         "{\"loaded\":%s,\"firmware_support\":false,\"path\":\"%s\","
@@ -256,9 +291,10 @@ static void timelapse_settings_get(int fd) {
         "\"bit_rate\":%d,\"crf\":%d,\"preset\":\"%s\",\"tune\":\"%s\",\"profile\":\"%s\",\"level\":\"%s\","
         "\"pic_max_size\":%d,\"keep_source_jpegs\":%s,"
         "\"picture_dir\":\"%s\",\"video_dir\":\"%s\",\"temp_link\":\"%s\","
-        "\"usb_storage_root\":\"/mnt/exUDISK/\"}\n",
+        "\"usb_storage_root\":\"/mnt/exUDISK/\",\"picture_space\":%s,\"video_space\":%s}\n",
         loaded ? "true" : "false", cc2_timelapse_settings_file, rm, s.width, s.height, s.camera_fps, s.output_fps,
-        s.bit_rate, s.crf, pr, tu, pf, lv, s.pic_max_size, s.keep_source_jpegs ? "true" : "false", pd, vd, tl);
+        s.bit_rate, s.crf, pr, tu, pf, lv, s.pic_max_size, s.keep_source_jpegs ? "true" : "false", pd, vd, tl,
+        pic_space, vid_space);
     respond(fd, loaded ? 200 : 503, loaded ? "OK" : "Service Unavailable", "application/json; charset=utf-8", body,
             (size_t)(n > 0 ? n : 0));
 }

@@ -6,6 +6,8 @@ export type TimelapseSettings = {
   firmware_support: boolean
   path: string
   usb_storage_root?: string
+  picture_space?: { available_bytes: number } | null
+  video_space?: { available_bytes: number } | null
   recording_mode: string
   width: number
   height: number
@@ -55,10 +57,14 @@ export const TIMELAPSE_USB_VIDEO = `${TIMELAPSE_USB_ROOT}timelapse/video/`
 export function timelapseStoragePathOk(path: string, tempLink: boolean): boolean {
   if (!path || path.includes('..') || path.includes('//')) return false
   if (tempLink) return path.startsWith('/tmp/') || path.startsWith('/opt/usr/')
-  return path.startsWith('/opt/usr/') || (path.startsWith(TIMELAPSE_USB_ROOT) && path.length > TIMELAPSE_USB_ROOT.length)
+  return (
+    path.startsWith('/opt/usr/') || (path.startsWith(TIMELAPSE_USB_ROOT) && path.length > TIMELAPSE_USB_ROOT.length)
+  )
 }
 
-export function validateTimelapseForm(form: Pick<TimelapseSettings, 'picture_dir' | 'video_dir' | 'temp_link'>): boolean {
+export function validateTimelapseForm(
+  form: Pick<TimelapseSettings, 'picture_dir' | 'video_dir' | 'temp_link'>
+): boolean {
   return (
     timelapseStoragePathOk(form.picture_dir, false) &&
     timelapseStoragePathOk(form.video_dir, false) &&

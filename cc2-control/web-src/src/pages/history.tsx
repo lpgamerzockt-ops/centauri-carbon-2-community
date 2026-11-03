@@ -82,7 +82,9 @@ const Video = ({ task, idle, busy }: { task: Task; idle: boolean; busy: boolean 
 
 export const History = () => {
   const h = history.use()
-  const v = view(printer.use().data)
+  const live = printer.use().data
+  const v = view(live)
+  const timelapseRendering = live?.timelapse_rendering === true || live?.machine?.status === 12
   const [page, setPage] = useState(0)
   const currentPage = pageIndex(page, h.tasks.length)
   useEffect(() => setPage(currentPage), [currentPage])
@@ -137,6 +139,11 @@ export const History = () => {
     'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-b border-edge px-1 py-2.5 cc2-md:grid-cols-[minmax(0,2.2fr)_1fr_.7fr_.8fr_13rem]'
   return (
     <Page title="common.history" sub="history.jobs_recorded_by_the_printer_and">
+      {timelapseRendering ? (
+        <p class="mb-3.5 rounded-lg border border-cyan/30 bg-panel px-3 py-2 text-sm" role="status">
+          {t('timelapse.rendering_banner')}
+        </p>
+      ) : null}
       <Card>
         <CardHead
           icon="file"

@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { store } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
@@ -10,6 +10,8 @@ import { meshRoot } from '@/lib/mesh'
 import { nearestMeasure, nozzleName, type PlateLibrary, usable } from '@/lib/plates'
 import { openPage, printer } from '@/lib/state'
 import { TimelapseSettingsLink } from '@/pages/TimelapseSettings'
+import { fetchTimelapseSettings } from '@/lib/timelapse-settings'
+import { timelapseLowSpace } from '@/lib/timelapse-presets'
 import { EXTERNAL, findSpool, g, spoolGrams, spoolLabel, type SpoolLibrary } from '@/lib/spools'
 
 type Pending = {
@@ -160,6 +162,7 @@ const Form = ({ job }: { job: Pending }) => {
   const [side, setSide] = useState<'A' | 'B'>('A')
   const [calibrate, setCalibrate] = useState(false)
   const [timelapse, setTimelapse] = useState(false)
+  const [timelapseSpaceWarn, setTimelapseSpaceWarn] = useState(false)
   const [busy, setBusy] = useState(false)
   const [meshAvailable, setMeshAvailable] = useState(job.meshAvailable)
   const [meshError, setMeshError] = useState(job.meshError)
@@ -201,6 +204,17 @@ const Form = ({ job }: { job: Pending }) => {
         ? measure
         : nearest?.id || ''
       : ''
+
+  useEffect(() => {
+    if (!timelapse) {
+      setTimelapseSpaceWarn(false)
+      return
+    }
+    void fetchTimelapseSettings()
+      .then(s => setTimelapseSpaceWarn(timelapseLowSpace(s.picture_space, s.video_space)))
+      .catch(() => setTimelapseSpaceWarn(false))
+  }, [timelapse])
+
   // Spool tracking: the spool each tool would draw from, and whether it holds what the slicer expects.
   const supply = (tool: number) => {
     const lib = job.spools
@@ -483,6 +497,11 @@ const Form = ({ job }: { job: Pending }) => {
         <div class="mt-1">
           <TimelapseSettingsLink />
         </div>
+        {timelapse && timelapseSpaceWarn ? (
+          <p class="mt-1 text-xs text-amber" role="status">
+            {t('print.timelapse_low_space_warning')}
+          </p>
+        ) : null}
         <div class="min-h-7 text-[13px] text-muted" role="status">
           {note}
         </div>
