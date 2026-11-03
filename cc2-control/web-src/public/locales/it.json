@@ -119,6 +119,9 @@
   "canvas.unavailable": "Non disponibile",
   "canvas.unload": "Scarica",
   "canvas.unload_filament_from_canvas_slot": "Scaricare il filamento dallo slot Canvas {slot}? La stampante potrebbe riscaldare, tagliare e muovere il filamento.",
+  "canvas.apply_single_nozzle_temp": "Apply {temp} °C to all Canvas slots",
+  "canvas.apply_single_nozzle_temp_confirm": "Set the saved nozzle temperature ({temp} °C) on every Canvas slot using material commands? Heater targets are not changed directly.",
+  "canvas.apply_single_nozzle_temp_done": "Canvas slot temperatures updated.",
   "common.all_heaters_off": "Spegni riscaldatori",
   "common.aux_fan": "Ventola ausiliaria",
   "common.available_when_idle": "Disponibili a stampante inattiva",
@@ -1390,5 +1393,7 @@
   "timelapse.record_on_usb": "Registra su chiavetta USB",
   "timelapse.usb_not_mounted": "Chiavetta USB non montata. Inseriscila (pagina File) o disattiva registrazione USB.",
   "timelapse.usb_recommend": "USB disponibile — attiva registrazione su chiavetta per /mnt/exUDISK/timelapse/…",
-  "timelapse.tune": "Tune x264"
+  "timelapse.tune": "Tune x264",
+  "settings.canvas_single_nozzle_temp": "Shared Canvas nozzle temperature (°C)",
+  "settings.canvas_single_nozzle_temp_hint": "Optional. When set, the Canvas page can apply this target to every slot via material info (not a direct heater command). Leave empty to disable."
 }

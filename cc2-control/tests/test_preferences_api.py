@@ -34,7 +34,7 @@ with tempfile.TemporaryDirectory(prefix="cc2-preferences-") as temporary:
         for _ in range(30):
             try:
                 with urllib.request.urlopen(endpoint, timeout=1) as response:
-                    assert json.load(response) == {"language": "", "theme": "dark", "quick_actions": ["home:ALL", "system:heaters_off", "system:fans_off", "system:motors_off"], "camera_persistent": False}
+                    assert json.load(response) == {"language": "", "theme": "dark", "quick_actions": ["home:ALL", "system:heaters_off", "system:fans_off", "system:motors_off"], "camera_persistent": False, "canvas_single_nozzle_temp": None}
                 break
             except OSError:
                 time.sleep(0.1)
@@ -55,19 +55,19 @@ with tempfile.TemporaryDirectory(prefix="cc2-preferences-") as temporary:
             headers={"X-CC2-Request": "1", "Content-Type": "application/json"})
         with urllib.request.urlopen(request, timeout=1) as response:
             assert json.load(response) == {"saved": True}
-        assert preferences.read_text(encoding="ascii") == '{"language":"it","theme":"dark","quick1":"home:ALL","quick2":"system:heaters_off","quick3":"system:fans_off","quick4":"system:motors_off","camera_persistent":false}\n'
+        assert preferences.read_text(encoding="ascii") == '{"language":"it","theme":"dark","quick1":"home:ALL","quick2":"system:heaters_off","quick3":"system:fans_off","quick4":"system:motors_off","camera_persistent":false,"canvas_single_nozzle_temp":null}\n'
         assert preferences.stat().st_mode & 0o777 == 0o600
         with urllib.request.urlopen(endpoint, timeout=1) as response:
-            assert json.load(response) == {"language": "it", "theme": "dark", "quick_actions": ["home:ALL", "system:heaters_off", "system:fans_off", "system:motors_off"], "camera_persistent": False}
+            assert json.load(response) == {"language": "it", "theme": "dark", "quick_actions": ["home:ALL", "system:heaters_off", "system:fans_off", "system:motors_off"], "camera_persistent": False, "canvas_single_nozzle_temp": None}
 
         request = urllib.request.Request(
             endpoint, data=b'{"language":"it","theme":"light"}', method="PUT",
             headers={"X-CC2-Request": "1", "Content-Type": "application/json"})
         with urllib.request.urlopen(request, timeout=1) as response:
             assert json.load(response) == {"saved": True}
-        assert preferences.read_text(encoding="ascii") == '{"language":"it","theme":"light","quick1":"home:ALL","quick2":"system:heaters_off","quick3":"system:fans_off","quick4":"system:motors_off","camera_persistent":false}\n'
+        assert preferences.read_text(encoding="ascii") == '{"language":"it","theme":"light","quick1":"home:ALL","quick2":"system:heaters_off","quick3":"system:fans_off","quick4":"system:motors_off","camera_persistent":false,"canvas_single_nozzle_temp":null}\n'
         with urllib.request.urlopen(endpoint, timeout=1) as response:
-            assert json.load(response) == {"language": "it", "theme": "light", "quick_actions": ["home:ALL", "system:heaters_off", "system:fans_off", "system:motors_off"], "camera_persistent": False}
+            assert json.load(response) == {"language": "it", "theme": "light", "quick_actions": ["home:ALL", "system:heaters_off", "system:fans_off", "system:motors_off"], "camera_persistent": False, "canvas_single_nozzle_temp": None}
 
         request = urllib.request.Request(
             endpoint, data=b'{"quick1":"page:files","quick2":"light:toggle","quick3":"home:Z","quick4":"page:canvas"}', method="PUT",
@@ -95,7 +95,7 @@ with tempfile.TemporaryDirectory(prefix="cc2-preferences-") as temporary:
         with urllib.request.urlopen(request, timeout=1) as response:
             assert json.load(response) == {"saved": True}
         with urllib.request.urlopen(endpoint, timeout=1) as response:
-            assert json.load(response) == {"language": "fr", "theme": "light", "quick_actions": ["page:files", "light:toggle", "home:Z", "page:canvas"], "camera_persistent": False}
+            assert json.load(response) == {"language": "fr", "theme": "light", "quick_actions": ["page:files", "light:toggle", "home:Z", "page:canvas"], "camera_persistent": False, "canvas_single_nozzle_temp": None}
 
         # Themes are identifiers too (the frontend owns the palettes): lowercase words joined by hyphens.
         for theme in ("dracula", "solarized-light"):

@@ -2,6 +2,7 @@
 #include "../src/control.h"
 #include <assert.h>
 #include <stdio.h>
+#include <time.h>
 static void snapshot(mqtt_client *m,const char *trays){
  int n=snprintf(m->canvas_snapshot,sizeof(m->canvas_snapshot),"{\"result\":{\"canvas_info\":{\"canvas_list\":[{\"connected\":1,\"tray_list\":%s}]}}}",trays);
  assert(n>0&&(size_t)n<sizeof(m->canvas_snapshot));m->canvas_snapshot_len=(size_t)n;
@@ -33,6 +34,11 @@ int main(void){
  assert(!strcmp(canvas_reason_name(v.reason_load),"unassigned_head"));
  assert(!control_build_script("canvas:load:1",&m,command,sizeof(command),reason,sizeof(reason)));
  assert(!control_build_script("canvas:unload:1",&m,command,sizeof(command),reason,sizeof(reason)));
+ m.have_sub_status=1;m.sub_status=2501;m.machine_status=1;
+ assert(!control_build_script("canvas:load:1",&m,command,sizeof(command),reason,sizeof(reason)));
+ m.sub_status=2401;
+ assert(!control_build_script("canvas:load:1",&m,command,sizeof(command),reason,sizeof(reason)));
+ m.sub_status=0;
  /* Native recovery must restore a real channel/status; remembering a slot
   * or selecting its UI card does not provide that confirmation. */
  m.canvas_direct_active=1;snapshot(&m,"[{\"tray_id\":1,\"status\":2}]");
@@ -49,5 +55,15 @@ int main(void){
  snapshot(&m,"[{\"tray_id\":2,\"status\":1}]");assert(canvas_slot_policy(&m,1).state==CV_UNKNOWN);
  snapshot(&m,"[{\"tray_id\":1,\"status\":99}]");assert(canvas_slot_policy(&m,1).state==CV_UNKNOWN);
  snapshot(&m,"[{\"tray_id\":1,\"status\":1,\"filament_name\":\"status: 0\"}]");assert(canvas_slot_policy(&m,1).load);
+ canvas_display_reset();
+ m.machine_status=1;m.connected=m.registered=m.have_machine_status=1;m.last_message=time(NULL);
+ m.canvas_direct_known=m.canvas_direct_idle=1;m.canvas_direct_active=-1;m.canvas_head_loaded=0;
+ snapshot(&m,"[{\"tray_id\":1,\"status\":0}]");
+ assert(canvas_slot_display_state(&m,1)==CV_EMPTY);
+ snapshot(&m,"[{\"tray_id\":1,\"status\":1}]");
+ assert(canvas_slot_display_state(&m,1)==CV_EMPTY);
+ struct timespec delay={.tv_sec=4,.tv_nsec=0};
+ nanosleep(&delay,NULL);
+ assert(canvas_slot_display_state(&m,1)==CV_PRESENT);
  puts("PASS: Canvas empty/present/loaded/transitional slots; exact load/unload actions; head, busy, stale, missing and inconsistent guards");return 0;
 }

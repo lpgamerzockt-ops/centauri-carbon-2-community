@@ -23,6 +23,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Pause/Resume: job controls follow `machine.sub_status` from `/api/printer` (disable Pause while pausing/paused, Resume only when paused and not resuming, Cancel during pause/resume transitions), show Pausing/Resuming/Paused text, and debounce duplicate pause/resume clicks (~2 s).
+- Canvas load: refuse `canvas:load` / recover-load during pause/resume sub-states (2501/2401) and while native filament load is active (status 13 / sub 1061), in addition to the existing tray debounce guard.
+- Canvas UI: stabilize empty/present slot display for ~3 s before flipping when tray telemetry flickers (load permissions stay on raw telemetry).
+
+### Added
+
+- Settings: optional shared Canvas nozzle temperature (`canvas_single_nozzle_temp` in `/api/preferences`) with a Canvas-page action to apply it to all slots via material commands (no direct heater changes).
+
+### Fixed (earlier in branch)
+
 - Spool tracking: debounce Canvas tray insert detection (`SPOOL_PRESENT_MS`, 15 s) before opening the “which spool?” question, stopping popup loops when tray status flickers (e.g. Canvas slot 1 false empty).
 - Canvas load: refuse `canvas:load` / recover-load while tray insert debounce is active, avoiding repeated `CANVAS_LOAD_FILAMENT` (and firmware re-heat steps) during FILA_DET flicker.
 

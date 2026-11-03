@@ -11,6 +11,8 @@ import { Activity, Info, Link, Palette, Plug, RefreshCw, Undo2, Archive, FileDow
 import { errText, notify, post, request } from '@/lib/api'
 import { collectDiagnostics } from '@/lib/diagnostics'
 import {
+  canvasPreferences,
+  setCanvasSingleNozzleTemp,
   setPersistentCamera,
   detectLanguage,
   i18n,
@@ -261,7 +263,24 @@ const Integrations = () => {
   const dbDefault = pandabreathDefaultHost(db.dragonbreath)
   const savedDbHost = pandabreathHost(db)
   const [dbHost, setDbHost] = useState(savedDbHost)
+  const canvasTempSaved = canvasPreferences.use().singleNozzleTemp
+  const [canvasTemp, setCanvasTemp] = useState(canvasTempSaved === null ? '' : String(canvasTempSaved))
+  useEffect(() => setCanvasTemp(canvasTempSaved === null ? '' : String(canvasTempSaved)), [canvasTempSaved])
   useEffect(() => setDbHost(savedDbHost), [savedDbHost]) // the firmware switch changes the default address
+  const saveCanvasTemp = async () => {
+    const trimmed = canvasTemp.trim()
+    const value = trimmed === '' ? null : Number(trimmed)
+    if (value !== null && (!Number.isFinite(value) || value < 120 || value > 320)) {
+      notify(t('settings.canvas_single_nozzle_temp_hint'), 'error')
+      return
+    }
+    try {
+      await setCanvasSingleNozzleTemp(value)
+      notify(t('common.command_accepted'))
+    } catch (e) {
+      notify(errText(e), 'error')
+    }
+  }
   const saveDbHost = () => {
     if (setPandaBreathHost(dbHost)) notify(tpl('settings.pandabreath_address_saved', dbName))
     else notify(tpl('settings.pandabreath_address_invalid', { host: dbDefault }), 'error')
@@ -270,6 +289,27 @@ const Integrations = () => {
     <Card>
       <CardHead icon="plug" title="settings.integrations" sub="settings.service_configuration_for_local" />
       <SpoolmanIntegration />
+      <div class={row}>
+        <label for="canvas-single-temp">
+          <b>{t('settings.canvas_single_nozzle_temp')}</b>
+        </label>
+        <span class="text-muted">{t('settings.canvas_single_nozzle_temp_hint')}</span>
+        <div class="flex flex-wrap items-center gap-2">
+          <Input
+            id="canvas-single-temp"
+            type="number"
+            min={120}
+            max={320}
+            step={1}
+            class="w-28"
+            value={canvasTemp}
+            placeholder="220"
+            onInput={e => setCanvasTemp(e.currentTarget.value)}
+            onKeyDown={e => e.key === 'Enter' && void saveCanvasTemp()}
+          />
+          <Button onClick={() => void saveCanvasTemp()}>{t('settings.save_address')}</Button>
+        </div>
+      </div>
       <div class={row}>
         <b>{t('settings.panda_breath_compatibility')}</b>
         <span class="text-muted">{t('settings.read_only_compatibility_endpoint')}</span>

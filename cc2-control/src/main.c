@@ -2719,8 +2719,9 @@ static void canvas_response(int fd, const mqtt_client *mqtt) {
       mqtt->machine_status,mqtt->canvas_uds_ready?(telemetry.canvas.auto_refill?"true":"false"):(mqtt->have_auto_refill?(mqtt->auto_refill?"true":"false"):"null"),mqtt->canvas_uds_ready?"uds":"mqtt");
     for(int i=0;i<4;i++){
       canvas_slot_view v=canvas_slot_policy(mqtt,i);
+      int display_state=canvas_slot_display_state(mqtt,i);
       json_builder_printf(&b,"%s{\"slot\":%d,\"state\":\"%s\",\"load\":%s,\"unload\":%s,\"recovery_load\":%s,\"reason_load\":\"%s\",\"reason_unload\":\"%s\"}",
-        i?",":"",i,canvas_kind_name(v.state),v.load?"true":"false",v.unload?"true":"false",
+        i?",":"",i,canvas_kind_name(display_state),v.load?"true":"false",v.unload?"true":"false",
         canvas_recovery_load_allowed(mqtt,i)?"true":"false",
         canvas_reason_name(v.reason_load),canvas_reason_name(v.reason_unload));
     }
@@ -3681,13 +3682,47 @@ static int preferences_camera_persistent(void) {
     return preferences_camera_value(body) == 1;
 }
 
+/* Optional shared PLA nozzle target for Canvas material edits; -1 when unset. */
+static int preferences_canvas_temp_marker(const char *body, int *out) {
+    const char *value = strstr(body, "\"canvas_single_nozzle_temp\":");
+    if (!value) return 0;
+    value += strlen("\"canvas_single_nozzle_temp\":");
+    while (isspace((unsigned char)*value)) value++;
+    if (!strncmp(value, "null", 4)) {
+        *out = -1;
+        value += 4;
+    } else {
+        char *end = NULL;
+        long temp = strtol(value, &end, 10);
+        if (end == value || temp < 120 || temp > 320) return -1;
+        *out = (int)temp;
+        value = end;
+    }
+    while (isspace((unsigned char)*value)) value++;
+    return (*value == ',' || *value == '}') ? 1 : -1;
+}
+
+static int preferences_canvas_single_nozzle_temp(void) {
+    FILE *file = fopen(ui_preferences_path, "rb");
+    if (!file) return -1;
+    char body[640];
+    size_t length = fread(body, 1, sizeof(body) - 1, file);
+    fclose(file); body[length] = '\0';
+    int temp = -1;
+    if (preferences_canvas_temp_marker(body, &temp) == 1) return temp;
+    return -1;
+}
+
 static void preferences_get_response(int fd) {
-    char body[384];
+    char temp_text[16], body[512];
+    int canvas_temp = preferences_canvas_single_nozzle_temp();
+    if (canvas_temp < 0) memcpy(temp_text, "null", 5);
+    else snprintf(temp_text, sizeof(temp_text), "%d", canvas_temp);
     int length = snprintf(body, sizeof(body),
-        "{\"language\":\"%s\",\"theme\":\"%s\",\"quick_actions\":[\"%s\",\"%s\",\"%s\",\"%s\"],\"camera_persistent\":%s}\n",
+        "{\"language\":\"%s\",\"theme\":\"%s\",\"quick_actions\":[\"%s\",\"%s\",\"%s\",\"%s\"],\"camera_persistent\":%s,\"canvas_single_nozzle_temp\":%s}\n",
         preferences_language(), preferences_theme(), preferences_quick_action(0),
         preferences_quick_action(1), preferences_quick_action(2), preferences_quick_action(3),
-        preferences_camera_persistent() ? "true" : "false");
+        preferences_camera_persistent() ? "true" : "false", temp_text);
     respond(fd, 200, "OK", "application/json; charset=utf-8", body, (size_t)length);
 }
 
@@ -3727,8 +3762,11 @@ static void preferences_put_response(int fd, const char *body, size_t body_len) 
                 !quick_action_valid(quick[slot])) valid_quick = 0;
         }
     }
-    if ((!has_language && !has_theme && !has_quick && !has_camera) || (has_language && !valid_language) ||
-        !valid_quick || camera_enabled < 0 ||
+    int has_canvas_temp = strstr(input, "\"canvas_single_nozzle_temp\":") != NULL;
+    int canvas_temp = preferences_canvas_single_nozzle_temp();
+    int canvas_marker = has_canvas_temp ? preferences_canvas_temp_marker(input, &canvas_temp) : 1;
+    if ((!has_language && !has_theme && !has_quick && !has_camera && !has_canvas_temp) || (has_language && !valid_language) ||
+        !valid_quick || camera_enabled < 0 || canvas_marker < 0 ||
         (has_theme && !valid_theme)) {
         const char *error = "{\"saved\":false,\"error\":\"Unsupported UI preference\"}\n";
         respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
@@ -3736,16 +3774,19 @@ static void preferences_put_response(int fd, const char *body, size_t body_len) 
     }
     const char *language = valid_language ? language_code : preferences_language();
     const char *theme = valid_theme ? theme_code : preferences_theme();
+    if (!has_canvas_temp) canvas_temp = preferences_canvas_single_nozzle_temp();
     char temporary[512];
     if (snprintf(temporary, sizeof(temporary), "%s.new", ui_preferences_path) >= (int)sizeof(temporary)) {
         const char *error = "{\"saved\":false,\"error\":\"Preferences path is too long\"}\n";
         respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
         return;
     }
-    char canonical[384];
+    char temp_text[16], canonical[512];
+    if (canvas_temp < 0) memcpy(temp_text, "null", 5);
+    else snprintf(temp_text, sizeof(temp_text), "%d", canvas_temp);
     int canonical_len = snprintf(canonical, sizeof(canonical),
-        "{\"language\":\"%s\",\"theme\":\"%s\",\"quick1\":\"%s\",\"quick2\":\"%s\",\"quick3\":\"%s\",\"quick4\":\"%s\",\"camera_persistent\":%s}\n",
-        language, theme, quick[0], quick[1], quick[2], quick[3], camera_enabled ? "true" : "false");
+        "{\"language\":\"%s\",\"theme\":\"%s\",\"quick1\":\"%s\",\"quick2\":\"%s\",\"quick3\":\"%s\",\"quick4\":\"%s\",\"camera_persistent\":%s,\"canvas_single_nozzle_temp\":%s}\n",
+        language, theme, quick[0], quick[1], quick[2], quick[3], camera_enabled ? "true" : "false", temp_text);
     FILE *file = fopen(temporary, "wb");
     int failed = !file;
     if (file) {

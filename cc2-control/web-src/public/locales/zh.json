@@ -119,6 +119,9 @@
   "canvas.unavailable": "不可用",
   "canvas.unload": "卸载",
   "canvas.unload_filament_from_canvas_slot": "从 Canvas 槽位 {slot} 卸载耗材？打印机可能会加热、切断并移动耗材。",
+  "canvas.apply_single_nozzle_temp": "Apply {temp} °C to all Canvas slots",
+  "canvas.apply_single_nozzle_temp_confirm": "Set the saved nozzle temperature ({temp} °C) on every Canvas slot using material commands? Heater targets are not changed directly.",
+  "canvas.apply_single_nozzle_temp_done": "Canvas slot temperatures updated.",
   "common.all_heaters_off": "关闭全部加热",
   "common.aux_fan": "辅助风扇",
   "common.available_when_idle": "空闲时可用",
@@ -1390,5 +1393,7 @@
   "timelapse.record_on_usb": "录制到 U 盘",
   "timelapse.usb_not_mounted": "U 盘未挂载。请插入 U 盘（文件页应显示 USB）或关闭 U 盘录制。",
   "timelapse.usb_recommend": "U 盘可用 — 开启 U 盘录制，文件保存在 /mnt/exUDISK/timelapse/…",
-  "timelapse.tune": "x264 tune"
+  "timelapse.tune": "x264 tune",
+  "settings.canvas_single_nozzle_temp": "Shared Canvas nozzle temperature (°C)",
+  "settings.canvas_single_nozzle_temp_hint": "Optional. When set, the Canvas page can apply this target to every slot via material info (not a direct heater command). Leave empty to disable."
 }

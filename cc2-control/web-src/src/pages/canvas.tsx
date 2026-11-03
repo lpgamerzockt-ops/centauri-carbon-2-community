@@ -27,6 +27,8 @@ import { canvas, canvasColour, canvasHex, refreshCanvas } from '@/lib/canvas'
 import { canvasTimeline, clearCanvasTimeline, type ObservedPrinterPhase } from '@/lib/canvas-events'
 import { printer } from '@/lib/state'
 import { findSpool, g, openChooser, refreshSpools, spoolLabel, spools } from '@/lib/spools'
+import { canvasPreferences } from '@/lib/i18n'
+import { printSubFlags } from '@/lib/machine'
 
 const I = { size: 16, strokeWidth: 1 }
 const MaterialDialog = ({ slot, onClose }: { slot: number; onClose: () => void }) => (
@@ -54,9 +56,18 @@ export const Canvas = () => {
   const [dialog, setDialog] = useState(false)
   const [refillBusy, setRefillBusy] = useState(false)
   const [resetBusy, setResetBusy] = useState(false)
+  const [applyTempBusy, setApplyTempBusy] = useState(false)
   const printerState = printer.use()
+  const singleNozzleTemp = canvasPreferences.use().singleNozzleTemp
+  const subFlags = printSubFlags(printerState.data?.machine)
+  const canvasMotionBlocked =
+    subFlags.filamentLoading || subFlags.pausing || subFlags.resuming || subFlags.sub === 2501 || subFlags.sub === 2401
   const idle = Boolean(
-    printerState.ok && printerState.data?.connected && printerState.data.machine?.status === 1 && !externalSelected
+    printerState.ok &&
+      printerState.data?.connected &&
+      printerState.data.machine?.status === 1 &&
+      !externalSelected &&
+      !canvasMotionBlocked
   )
   const resetAll = async () => {
     if (resetBusy || !idle || !model?.connected) return
@@ -126,6 +137,26 @@ export const Canvas = () => {
       setTimeout(refreshCanvas, 600)
     } catch (e) {
       notify(errText(e), 'error')
+    }
+  }
+  const applySingleNozzleTemp = async () => {
+    if (applyTempBusy || !idle || !model?.connected || singleNozzleTemp === null) return
+    const temp = singleNozzleTemp
+    if (!(await ask(tpl('canvas.apply_single_nozzle_temp_confirm', { temp }), true))) return
+    setApplyTempBusy(true)
+    try {
+      for (let slot = 0; slot < 4; slot++) {
+        const tray = model?.trays[slot]
+        if (!tray || Number(tray.status) <= 0) continue
+        const material = String(tray.filament_type || tray.filament_name || 'PLA').replace(/[:]/g, '')
+        const colour = canvasHex(tray.filament_color, slot).slice(1)
+        const min = Math.max(120, temp - 30)
+        if (!(await control(`canvas:material:${slot}:${material}:${colour}:${min}:${temp}`, ''))) return
+      }
+      notify(t('canvas.apply_single_nozzle_temp_done'))
+      setTimeout(refreshCanvas, 700)
+    } finally {
+      setApplyTempBusy(false)
     }
   }
   // Readback comes from the printer: CC2 Control asks for the Canvas state again once the change is accepted.
@@ -402,6 +433,13 @@ export const Canvas = () => {
             </Button>
             <p class="mt-1 text-xs text-muted">{t('canvas.auto_refill_hint')}</p>
           </div>
+          {singleNozzleTemp !== null && (
+            <div class="cc2-canvas-single-temp mt-3.5">
+              <Button wide disabled={!ok || !idle || applyTempBusy} onClick={() => void applySingleNozzleTemp()}>
+                {tpl('canvas.apply_single_nozzle_temp', { temp: singleNozzleTemp })}
+              </Button>
+            </div>
+          )}
           <CanvasUnload idle={idle} compact />
           <div class="cc2-canvas-reset">
             <Button disabled={!ok || !idle || resetBusy} onClick={resetAll}>

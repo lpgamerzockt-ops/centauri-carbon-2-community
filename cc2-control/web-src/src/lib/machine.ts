@@ -60,6 +60,16 @@ const SUB: Record<number, Record<number, Key[]>> = {
 export const subState = (machine: any) =>
   (SUB[Number(machine?.status)]?.[Number(machine?.sub_status)] ?? []).map(k => t(k)).join(' · ')
 
+export const printSubFlags = (machine: any) => {
+  const status = Number(machine?.status)
+  const sub = Number(machine?.sub_status)
+  const pausing = status === 2 && sub === 2501
+  const resuming = status === 2 && sub === 2401
+  const pausedSub = status === 2 && (sub === 2502 || sub === 2505)
+  const filamentLoading = status === 13 && sub === 1061
+  return { pausing, resuming, pausedSub, filamentLoading, sub, status }
+}
+
 // The machine state followed by its detail, e.g. "Printing · Heating bed".
 export const stateText = (v: { state: string; detail: string }) =>
   v.detail ? `${tState(v.state)} · ${v.detail}` : tState(v.state)

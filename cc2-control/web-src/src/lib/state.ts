@@ -1,7 +1,7 @@
 import { store, ls } from './store'
 import { request } from './api'
 import { duration, finishTime } from './format'
-import { subState } from './machine'
+import { subState, printSubFlags } from './machine'
 
 export type Page =
   | 'dashboard'
@@ -158,6 +158,8 @@ export function view(d: any) {
   const state: string = d?.machine?.status_name || 'Unknown'
   const jobState = String(d?.print?.state || '')
   const paused = /pause/i.test(jobState) || /pause/i.test(state)
+  const sub = printSubFlags(d?.machine)
+  const pausedEffective = paused || sub.pausedSub
   const rawFilename: string = d?.print?.filename || ''
   const layer = d?.print?.current_layer || 0
   const totalRaw = d?.print && (d.print.total_layer || d.print.total_layers || d.print.total_layer_count)
@@ -182,8 +184,20 @@ export function view(d: any) {
         ? 0
         : Math.max(0, Math.min(100, Number(d?.machine?.progress || 0))),
     idle: /idle|ready/i.test(state),
-    printing: !paused && (/print/i.test(state) || /print/i.test(jobState)),
-    paused,
+    printing: !pausedEffective && (/print/i.test(state) || /print/i.test(jobState)),
+    paused: pausedEffective,
+    pausing: sub.pausing,
+    resuming: sub.resuming,
+    printPhase: sub.pausing || sub.resuming || pausedEffective ? subState(d?.machine) : '',
+    canPause:
+      Boolean(d?.print?.filename) &&
+      !pausedEffective &&
+      !sub.pausing &&
+      !sub.resuming &&
+      (/print/i.test(state) || /print/i.test(jobState)),
+    canResume: pausedEffective && !sub.resuming && !sub.pausing,
+    canCancelPrint: active && !sub.pausing && !sub.resuming,
+    filamentLoading: sub.filamentLoading,
     elapsedText: active ? duration(elapsed) : '—',
     remainingText: active ? duration(remaining) : '—',
     finishText: active ? finishTime(remaining) : '—',

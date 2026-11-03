@@ -75,6 +75,70 @@ static inline int canvas_recovery_load_allowed(const mqtt_client *m,int slot) {
  for(int i=0;i<4;i++){int status=canvas_reported_status(m,i);if(status!=0&&status!=1)return 0;}
  return 1;
 }
+#define CANVAS_DISPLAY_HYSTERESIS_MS 3000LL
+
+typedef struct {
+    int shown; /* 0 empty, 1 present, -1 unset */
+    int pending;
+    long long pending_since_ms;
+} canvas_display_track;
+
+static canvas_display_track canvas_display[4];
+
+static inline void canvas_display_reset(void) {
+    for (int i = 0; i < 4; ++i) canvas_display[i] = (canvas_display_track){-1, -1, 0};
+}
+
+static inline long long canvas_now_ms(void) {
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) return (long long)time(NULL) * 1000LL;
+    return (long long)ts.tv_sec * 1000LL + ts.tv_nsec / 1000000LL;
+}
+
+/* Tray MQTT status 0/1 only; loaded/unknown skips hysteresis. */
+static inline int canvas_tray_empty_present(const mqtt_client *m, int slot) {
+    int status = canvas_reported_status(m, slot);
+    if (status == 0 || status == 1) return status;
+    return -1;
+}
+
+static inline int canvas_display_empty_present(const mqtt_client *m, int slot) {
+    if (!canvas_source_valid(m)) {
+        canvas_display[slot] = (canvas_display_track){-1, -1, 0};
+        return -1;
+    }
+    int raw = canvas_tray_empty_present(m, slot);
+    if (raw < 0) return raw;
+    canvas_display_track *t = &canvas_display[slot];
+    if (t->shown < 0) {
+        t->shown = raw;
+        t->pending = -1;
+        return raw;
+    }
+    if (raw == t->shown) {
+        t->pending = -1;
+        return t->shown;
+    }
+    long long now = canvas_now_ms();
+    if (t->pending != raw) {
+        t->pending = raw;
+        t->pending_since_ms = now;
+        return t->shown;
+    }
+    if (now - t->pending_since_ms >= CANVAS_DISPLAY_HYSTERESIS_MS) {
+        t->shown = raw;
+        t->pending = -1;
+    }
+    return t->shown;
+}
+
+static inline int canvas_load_refused(const mqtt_client *m) {
+    if (!m->have_machine_status) return 0;
+    if (m->machine_status == 13 && m->have_sub_status && m->sub_status == 1061) return 1;
+    if (m->have_sub_status && (m->sub_status == 2501 || m->sub_status == 2401)) return 1;
+    return 0;
+}
+
 static inline canvas_slot_view canvas_slot_policy(const mqtt_client *m,int slot) {
  canvas_slot_view v={CV_UNKNOWN,0,0,CR_UNAVAILABLE,CR_UNAVAILABLE};
  if(!canvas_source_valid(m))return v;
@@ -100,5 +164,14 @@ static inline canvas_slot_view canvas_slot_policy(const mqtt_client *m,int slot)
  if(active==-1&&!head){v.load=1;v.reason_load=CR_NONE;}
  else v.reason_load=CR_HEAD_OCCUPIED;
  return v;
+}
+
+static inline int canvas_slot_display_state(const mqtt_client *m, int slot) {
+    canvas_slot_view policy = canvas_slot_policy(m, slot);
+    if (policy.state != CV_EMPTY && policy.state != CV_PRESENT) return policy.state;
+    int display = canvas_display_empty_present(m, slot);
+    if (display == 0) return CV_EMPTY;
+    if (display == 1) return CV_PRESENT;
+    return policy.state;
 }
 #endif

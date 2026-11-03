@@ -48,6 +48,20 @@ const themeId = (mode: unknown) => (THEMES.some(x => x.id === mode) ? (mode as s
 export const theme = store({ mode: themeId(ls.get('cc2-theme')) })
 
 export const cameraPreferences = store({ persistent: false })
+export const canvasPreferences = store({ singleNozzleTemp: null as number | null })
+
+export async function setCanvasSingleNozzleTemp(temp: number | null) {
+  const body =
+    temp === null || !Number.isFinite(temp)
+      ? { canvas_single_nozzle_temp: null }
+      : { canvas_single_nozzle_temp: Math.round(temp) }
+  await request('/api/preferences', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-CC2-Request': '1' },
+    body: JSON.stringify(body),
+  })
+  canvasPreferences.set({ singleNozzleTemp: body.canvas_single_nozzle_temp ?? null })
+}
 export async function setPersistentCamera(persistent: boolean) {
   await request('/api/preferences', {
     method: 'PUT',
@@ -150,6 +164,13 @@ export async function loadUiPreferences() {
   try {
     const p = await boundedJson('/api/preferences')
     cameraPreferences.set({ persistent: p.camera_persistent === true })
+    const rawTemp = p.canvas_single_nozzle_temp
+    canvasPreferences.set({
+      singleNozzleTemp:
+        typeof rawTemp === 'number' && Number.isFinite(rawTemp) && rawTemp >= 120 && rawTemp <= 320
+          ? Math.round(rawTemp)
+          : null,
+    })
     setTheme(p.theme)
     setQuickFromServer(p.quick_actions)
     await setLanguage(p.language || detectLanguage()) // empty: nothing saved on the printer yet
