@@ -9,6 +9,7 @@ import { canvasHex, canvasModel } from '@/lib/canvas'
 import { meshRoot } from '@/lib/mesh'
 import { nearestMeasure, nozzleName, type PlateLibrary, usable } from '@/lib/plates'
 import { openPage, printer } from '@/lib/state'
+import { TimelapseSettingsLink } from '@/pages/TimelapseSettings'
 import { EXTERNAL, findSpool, g, spoolGrams, spoolLabel, type SpoolLibrary } from '@/lib/spools'
 
 type Pending = {
@@ -479,6 +480,9 @@ const Form = ({ job }: { job: Pending }) => {
           />
           {t('print.enable_timelapse')}
         </label>
+        <div class="mt-1">
+          <TimelapseSettingsLink />
+        </div>
         <div class="min-h-7 text-[13px] text-muted" role="status">
           {note}
         </div>

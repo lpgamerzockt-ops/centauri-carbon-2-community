@@ -240,6 +240,11 @@ path traversal, symlink and hard-link restrictions remain; copying is still Idle
 headers, for example with 409 because the name exists, it first reads the rest of the
 request body, so a browser receives the error instead of a reset connection.
 
+## Timelapse settings (printer file)
+
+- `GET /api/timelapse/settings` returns the current `[timelapse]` section from `/opt/usr/cfg/timelapse.cfg` (defaults when missing). `firmware_support` is `false` until a firmware build reads the file.
+- `POST /api/timelapse/settings` accepts JSON with the same fields; requires an idle printer (`409` otherwise). Validates paths under `/opt/usr/` (and `/tmp/` for the temp symlink). Does not change live capture until Phase 3 firmware.
+
 ## Timelapse print option
 
 `POST /api/gcode-files/print` accepts an optional sixth newline-separated field after storage,

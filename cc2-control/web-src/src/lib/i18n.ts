@@ -4,6 +4,7 @@ import { notify, request } from './api'
 import { setQuickFromServer } from './quick'
 
 export const LANGUAGE_NAMES: Record<string, string> = {
+  de: 'Deutsch',
   en: 'English',
   it: 'Italiano',
   fr: 'Français',

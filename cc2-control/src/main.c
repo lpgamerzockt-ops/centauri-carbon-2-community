@@ -3273,6 +3273,9 @@ static const char *pending_autosave_guard(void);
 #include "spoolman.h"
 #include "sha256.h"
 #include "canvas_unload.h"
+#include "timelapse_settings.h"
+
+const char *cc2_timelapse_settings_file = "/opt/usr/cfg/timelapse.cfg";
 
 static const char *pending_autosave_guard(void) {
     if (canvas_unload_pending())
@@ -3360,6 +3363,60 @@ static void serve_locale(int fd, const char *web_root, const char *request_path)
     fclose(file);
     if (read_len == (size_t)size)
         respond(fd, 200, "OK", "application/json; charset=utf-8", body, read_len);
+    free(body);
+}
+
+/* Fixed web-root assets for PWA (manifest, service worker, icons). No directory traversal. */
+static int web_asset_allowed(const char *path) {
+    if (!strcmp(path, "/manifest.webmanifest") || !strcmp(path, "/sw.js") || !strcmp(path, "/apple-touch-icon.png")) return 1;
+    if (!strncmp(path, "/icons/icon-", 12)) {
+        const char *rest = path + 12;
+        if (!strcmp(rest, "192.png") || !strcmp(rest, "512.png")) return 1;
+    }
+    return 0;
+}
+
+static void serve_web_asset(int fd, const char *web_root, const char *request_path) {
+    if (!web_asset_allowed(request_path)) {
+        const char *body = "Not found\n";
+        respond(fd, 404, "Not Found", "text/plain; charset=utf-8", body, strlen(body));
+        return;
+    }
+    const char *relative = request_path + 1;
+    char path[PATH_MAX_LOCAL];
+    if (snprintf(path, sizeof(path), "%s/%s", web_root, relative) >= (int)sizeof(path)) {
+        const char *body = "Asset path is too long\n";
+        respond(fd, 500, "Internal Server Error", "text/plain; charset=utf-8", body, strlen(body));
+        return;
+    }
+    FILE *file = fopen(path, "rb");
+    if (!file) {
+        const char *body = "Not found\n";
+        respond(fd, 404, "Not Found", "text/plain; charset=utf-8", body, strlen(body));
+        return;
+    }
+    if (fseek(file, 0, SEEK_END) != 0) {
+        fclose(file);
+        return;
+    }
+    long size = ftell(file);
+    if (size < 0 || size > 1024 * 1024) {
+        fclose(file);
+        return;
+    }
+    rewind(file);
+    char *body = malloc((size_t)size);
+    if (!body) {
+        fclose(file);
+        return;
+    }
+    size_t read_len = fread(body, 1, (size_t)size, file);
+    fclose(file);
+    const char *type = "application/octet-stream";
+    if (!strcmp(request_path, "/manifest.webmanifest")) type = "application/manifest+json; charset=utf-8";
+    else if (!strcmp(request_path, "/sw.js")) type = "application/javascript; charset=utf-8";
+    else if (strstr(request_path, ".png")) type = "image/png";
+    if (read_len == (size_t)size) respond(fd, 200, "OK", type, body, read_len);
     free(body);
 }
 
@@ -4076,6 +4133,8 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         serve_index(fd, web_root);
     } else if (strcmp(method,"GET")==0 && strncmp(path,"/i18n/",6)==0) {
         serve_locale(fd, web_root, path);
+    } else if (strcmp(method,"GET")==0 && web_asset_allowed(path)) {
+        serve_web_asset(fd, web_root, path);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/orca/pending-print")==0) {
         orca_pending_response(fd);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/orca/pending-print/clear")==0) {
@@ -4134,6 +4193,10 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         presets_get_response(fd);
     } else if (strcmp(method,"PUT")==0 && strcmp(path,"/api/material-presets")==0) {
         presets_put_response(fd,body,body_len);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/timelapse/settings")==0) {
+        timelapse_settings_get(fd);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/timelapse/settings")==0) {
+        timelapse_settings_post(fd,mqtt,body,body_len);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/preferences")==0) {
         preferences_get_response(fd);
     } else if (strcmp(method,"PUT")==0 && strcmp(path,"/api/preferences")==0) {
@@ -4271,6 +4334,7 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--plates") == 0 && i + 1 < argc) plates_path = argv[++i];
         else if (strcmp(argv[i], "--spools") == 0 && i + 1 < argc) spools_path = argv[++i];
         else if (strcmp(argv[i], "--autosave") == 0 && i + 1 < argc) printer_autosave_path = argv[++i];
+        else if (strcmp(argv[i], "--timelapse-settings") == 0 && i + 1 < argc) cc2_timelapse_settings_file = argv[++i];
         else if (strcmp(argv[i], "--gcode-internal") == 0 && i + 1 < argc) gcode_internal_root = argv[++i];
         else if (strcmp(argv[i], "--gcode-usb") == 0 && i + 1 < argc) gcode_usb_root = argv[++i];
         else {
