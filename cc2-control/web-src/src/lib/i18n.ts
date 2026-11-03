@@ -40,6 +40,9 @@ export const THEMES: { id: string; key?: Key; label?: string }[] = [
   { id: 'monokai', label: 'Monokai' },
   { id: 'solarized-light', label: 'Solarized Light' },
   { id: 'obsidian', label: 'Obsidian' },
+  { id: 'murin-carbon', key: 'settings.theme_murin_carbon' },
+  { id: 'murin-amber', key: 'settings.theme_murin_amber' },
+  { id: 'murin-slate', key: 'settings.theme_murin_slate' },
 ]
 const themeId = (mode: unknown) => (THEMES.some(x => x.id === mode) ? (mode as string) : 'dark')
 export const theme = store({ mode: themeId(ls.get('cc2-theme')) })

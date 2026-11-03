@@ -146,6 +146,24 @@
 }
 :root[data-theme="obsidian"] .cc2-dashboard .text-2xl:not(h2),
 :root[data-theme="obsidian"] .cc2-job-stats strong { color: var(--blue); }
+:root[data-theme="murin-carbon"] {
+  color-scheme: dark;
+  --bg: #041018; --panel: #0a2433; --edge: #1a4a62; --text: #e8f4fa; --muted: #7fa8bc; --field: #0f2f42; --ink: #021820;
+  --cyan: #00c4e8; --green: #2fd89a; --amber: #ffb84a; --red: #ff6b7a; --blue: #3eb8ff;
+  --well: #030d14; --well-fg: #e8f4fa;
+}
+:root[data-theme="murin-amber"] {
+  color-scheme: dark;
+  --bg: #14100a; --panel: #221a10; --edge: #4a3a22; --text: #f7f0e6; --muted: #b8a688; --field: #2a2014; --ink: #1a1208;
+  --cyan: #ffb020; --green: #6ecf8a; --amber: #ffd36a; --red: #ff5c5c; --blue: #7ec8ff;
+  --well: #0f0c08; --well-fg: #f7f0e6;
+}
+:root[data-theme="murin-slate"] {
+  color-scheme: dark;
+  --bg: #12141a; --panel: #1c2028; --edge: #3a4250; --text: #eef1f6; --muted: #9aa3b2; --field: #252a34; --ink: #0c0e12;
+  --cyan: #8b9cff; --green: #5fd4a0; --amber: #e8b84a; --red: #ff7088; --blue: #6ec4ff;
+  --well: #0a0c10; --well-fg: #eef1f6;
+}
 /* Inter (SIL OFL, see fonts/OFL.txt): variable 400â€“700, Latin + Latin-1 only, inlined by the build so it needs no request. */
 @font-face { font-family: "Inter"; font-weight: 400 700; font-display: swap; src: url("./fonts/inter-latin.woff2") format("woff2"); }
 body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Inter", "Segoe UI", Arial, sans-serif; }
