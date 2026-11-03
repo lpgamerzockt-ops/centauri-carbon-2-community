@@ -6,6 +6,9 @@ import { checkUpdateNotice, UPDATE_RETRY_INTERVAL } from '@/lib/updates'
 import { poll } from '@/lib/poll'
 import { loadPresets, nav, refreshHealth, refreshPrinter } from '@/lib/state'
 import { checkOrcaPendingPrint } from '@/pages/print-dialog'
+import { registerServiceWorker } from '@/lib/pwa'
+
+registerServiceWorker()
 
 const root = document.getElementById('app')
 setTheme(theme.get().mode)
