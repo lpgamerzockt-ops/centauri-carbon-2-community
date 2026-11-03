@@ -8,6 +8,9 @@ int control_build_script(const char *action, const mqtt_client *mqtt,
                          char *script, size_t script_cap,
                          char *reason, size_t reason_cap);
 
+/* 1 while spool tracking waits for stable tray insert (SPOOL_PRESENT_MS); used to refuse Canvas load. */
+int spools_tray_insert_stabilizing(int slot);
+
 /* SET_TMC_FIELD values for the X/Y motor mode (motors:quiet / motors:normal).
  * The firmware refuses a literal 0, so the zero values overflow the field
  * width and are masked to 0 by the driver register helper. */

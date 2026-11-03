@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - Spool tracking: debounce Canvas tray insert detection (`SPOOL_PRESENT_MS`, 15 s) before opening the “which spool?” question, stopping popup loops when tray status flickers (e.g. Canvas slot 1 false empty).
+- Canvas load: refuse `canvas:load` / recover-load while tray insert debounce is active, avoiding repeated `CANVAS_LOAD_FILAMENT` (and firmware re-heat steps) during FILA_DET flicker.
 
 - Stop presenting a completed older application update as the current selection after a full firmware upgrade; retain failed/current jobs, logs and rollback backups. Reported by **Neme77** (#287).
 

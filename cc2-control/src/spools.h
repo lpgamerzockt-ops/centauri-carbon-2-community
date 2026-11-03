@@ -989,6 +989,13 @@ static void spools_load(void) {
     else { memset(&spools, 0, sizeof(spools)); spools.job.last_tray = -1; }
 }
 
+int spools_tray_insert_stabilizing(int index) {
+    if (!spools_available || !spools.enabled || index < 0 || index > 3) return 0;
+    const spool_slot *s = &spools.slots[index];
+    if (!s->present_ms) return 0;
+    return spools_clock() - s->present_ms < SPOOL_PRESENT_MS;
+}
+
 /* Main loop: tray events, counting, and saving what changed. */
 static void spools_tick(const mqtt_client *mqtt) {
     if (!spools_available) return;

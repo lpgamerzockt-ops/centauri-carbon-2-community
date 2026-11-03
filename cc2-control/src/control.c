@@ -246,6 +246,8 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         slot=action[20]-'0';
         if(!canvas_recovery_load_allowed(m,slot))
             return reject(reason,reason_cap,"Canvas recovery requires fresh idle telemetry, a present slot and an unassigned head");
+        if(spools_tray_insert_stabilizing(slot))
+            return reject(reason,reason_cap,"Canvas load waits for stable tray detection (about 15 s after filament detect flicker)");
         snprintf(script,cap,"CANVAS_LOAD_FILAMENT CHANNEL=%d",slot);return 1;
     }
     if(sscanf(action,"canvas:load:%d",&slot)==1){
@@ -256,6 +258,8 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
         if(sscanf(action,"canvas:load:%d%n",&slot,&end)!=1||action[end])return reject(reason,reason_cap,"Invalid Canvas action");
         canvas_slot_view view=canvas_slot_policy(m,slot);
         if(!view.load)return reject(reason,reason_cap,canvas_reason_name(view.reason_load));
+        if(spools_tray_insert_stabilizing(slot))
+            return reject(reason,reason_cap,"Canvas load waits for stable tray detection (about 15 s after filament detect flicker)");
         snprintf(script,cap,"CANVAS_LOAD_FILAMENT CHANNEL=%d",slot);return 1;
     }
     if(sscanf(action,"canvas:unload:%d",&slot)==1){
