@@ -5,7 +5,8 @@ import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Select } from '@/components/ui/field'
 import { errText, notify, post, request, toast } from '@/lib/api'
 import { t, tpl } from '@/lib/i18n'
-import { canvasHex, canvasModel } from '@/lib/canvas'
+import { canvasHex, canvasModel, waitCanvasSlotsStable } from '@/lib/canvas'
+import { printControlDebounced } from '@/lib/print-controls'
 import { meshRoot } from '@/lib/mesh'
 import { nearestMeasure, nozzleName, type PlateLibrary, usable } from '@/lib/plates'
 import { openPage, printer } from '@/lib/state'
@@ -257,10 +258,24 @@ const Form = ({ job }: { job: Pending }) => {
     const mapping = useCanvas ? job.tools.map(tool => `${tool}:${map[tool]}`).join(',') : ''
     if (multi && !mapping) return setNote(t('print.a_multicolour_file_requires_canvas'))
     setBusy(true)
-    setNote(
-      t(job.storage === 'usb' ? 'print.importing_usb_g_code_to_internal' : 'print.submitting_protected_print_request')
-    )
     try {
+      if (useCanvas && mapping) {
+        const slots = [...new Set(job.tools.map(tool => Number(map[tool])))].filter(Number.isFinite)
+        setNote(t('print.canvas_slot_wait'))
+        const stable = await waitCanvasSlotsStable(slots)
+        if (!stable.ok) {
+          setNote(tpl('print.canvas_slot_not_ready', { slot: (stable.failedSlot ?? 0) + 1 }))
+          setBusy(false)
+          return
+        }
+      }
+      if (printControlDebounced()) {
+        setBusy(false)
+        return
+      }
+      setNote(
+        t(job.storage === 'usb' ? 'print.importing_usb_g_code_to_internal' : 'print.submitting_protected_print_request')
+      )
       const result = await post(
         '/api/gcode-files/print',
         `${job.storage}\n${job.path}\n${mapping}\n${side}\n${calibrating ? 'calibrate' : 'saved'}\n${timelapse ? '1' : '0'}\n${measureId}\n${nozzleId}`

@@ -435,6 +435,8 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
     }
     if(sscanf(action,"print:%31s",b)==1){
         if(strcmp(b,"pause")==0){if(!printing(m))return reject(reason,reason_cap,"No print is active");snprintf(script,cap,"PAUSE");return 1;}
+        /* No verified lighter native pause macro in CC2 docs; Break uses PAUSE and disables auto refill in main.c. */
+        if(strcmp(b,"break")==0){if(!printing(m))return reject(reason,reason_cap,"No print is active");snprintf(script,cap,"PAUSE");return 1;}
         if(strcmp(b,"resume")==0){snprintf(script,cap,"RESUME");return 1;}
         if(strcmp(b,"cancel")==0){if(!printing(m))return reject(reason,reason_cap,"No print is active");snprintf(script,cap,"CANCEL_PRINT");return 1;}
     }

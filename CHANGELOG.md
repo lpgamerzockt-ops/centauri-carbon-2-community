@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Appearance: Murin themes Murin Carbon, Murin Amber, Murin Slate (Settings → Appearance).
+- CC2 Control: print **Break** (`print:break`) pauses with Canvas auto refill off for the session; **PLA/PETG material profiles** for applying slot limits; print-start Canvas slot stability wait; job HUD for pause transitions and error 1211 (#1, CC-19).
 - Timelapse UI: resolution presets (640×360, 854×480, 1280×720), USB recording toggle, encoder profile/level/tune exposed for all quality presets.
 - Phase 3 firmware integration: `builder/current/components/ai_camera_timelapse/` (`timelapse.cfg` parser, overlay apply script, host test).
 

@@ -11,11 +11,36 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+CANVAS_DEFAULT = {
+    "canvas_material_profile": "pla",
+    "canvas_profile_pla_min": 190,
+    "canvas_profile_pla_max": 220,
+    "canvas_profile_petg_min": 230,
+    "canvas_profile_petg_max": 250,
+    "canvas_single_material_refill_off": True,
+}
+CANVAS_ON_DISK = (
+    '"canvas_material_profile":"pla","canvas_profile_pla_min":190,"canvas_profile_pla_max":220,'
+    '"canvas_profile_petg_min":230,"canvas_profile_petg_max":250,"canvas_single_material_refill_off":true'
+)
+
 
 def free_port():
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         return probe.getsockname()[1]
+
+
+def prefs_get(language="", theme="dark", quick=None, camera=False):
+    if quick is None:
+        quick = ["home:ALL", "system:heaters_off", "system:fans_off", "system:motors_off"]
+    return {
+        "language": language,
+        "theme": theme,
+        "quick_actions": quick,
+        "camera_persistent": camera,
+        **CANVAS_DEFAULT,
+    }
 
 
 binary = Path(sys.argv[1]).resolve()
@@ -34,7 +59,7 @@ with tempfile.TemporaryDirectory(prefix="cc2-preferences-") as temporary:
         for _ in range(30):
             try:
                 with urllib.request.urlopen(endpoint, timeout=1) as response:
-                    assert json.load(response) == {"language": "", "theme": "dark", "quick_actions": ["home:ALL", "system:heaters_off", "system:fans_off", "system:motors_off"], "camera_persistent": False, "canvas_single_nozzle_temp": None}
+                    assert json.load(response) == prefs_get()
                 break
             except OSError:
                 time.sleep(0.1)
@@ -55,19 +80,27 @@ with tempfile.TemporaryDirectory(prefix="cc2-preferences-") as temporary:
             headers={"X-CC2-Request": "1", "Content-Type": "application/json"})
         with urllib.request.urlopen(request, timeout=1) as response:
             assert json.load(response) == {"saved": True}
-        assert preferences.read_text(encoding="ascii") == '{"language":"it","theme":"dark","quick1":"home:ALL","quick2":"system:heaters_off","quick3":"system:fans_off","quick4":"system:motors_off","camera_persistent":false,"canvas_single_nozzle_temp":null}\n'
+        assert preferences.read_text(encoding="ascii") == (
+            '{"language":"it","theme":"dark","quick1":"home:ALL","quick2":"system:heaters_off",'
+            '"quick3":"system:fans_off","quick4":"system:motors_off","camera_persistent":false,'
+            + CANVAS_ON_DISK + '}\n'
+        )
         assert preferences.stat().st_mode & 0o777 == 0o600
         with urllib.request.urlopen(endpoint, timeout=1) as response:
-            assert json.load(response) == {"language": "it", "theme": "dark", "quick_actions": ["home:ALL", "system:heaters_off", "system:fans_off", "system:motors_off"], "camera_persistent": False, "canvas_single_nozzle_temp": None}
+            assert json.load(response) == prefs_get(language="it")
 
         request = urllib.request.Request(
             endpoint, data=b'{"language":"it","theme":"light"}', method="PUT",
             headers={"X-CC2-Request": "1", "Content-Type": "application/json"})
         with urllib.request.urlopen(request, timeout=1) as response:
             assert json.load(response) == {"saved": True}
-        assert preferences.read_text(encoding="ascii") == '{"language":"it","theme":"light","quick1":"home:ALL","quick2":"system:heaters_off","quick3":"system:fans_off","quick4":"system:motors_off","camera_persistent":false,"canvas_single_nozzle_temp":null}\n'
+        assert preferences.read_text(encoding="ascii") == (
+            '{"language":"it","theme":"light","quick1":"home:ALL","quick2":"system:heaters_off",'
+            '"quick3":"system:fans_off","quick4":"system:motors_off","camera_persistent":false,'
+            + CANVAS_ON_DISK + '}\n'
+        )
         with urllib.request.urlopen(endpoint, timeout=1) as response:
-            assert json.load(response) == {"language": "it", "theme": "light", "quick_actions": ["home:ALL", "system:heaters_off", "system:fans_off", "system:motors_off"], "camera_persistent": False, "canvas_single_nozzle_temp": None}
+            assert json.load(response) == prefs_get(language="it", theme="light")
 
         request = urllib.request.Request(
             endpoint, data=b'{"quick1":"page:files","quick2":"light:toggle","quick3":"home:Z","quick4":"page:canvas"}', method="PUT",
@@ -95,7 +128,11 @@ with tempfile.TemporaryDirectory(prefix="cc2-preferences-") as temporary:
         with urllib.request.urlopen(request, timeout=1) as response:
             assert json.load(response) == {"saved": True}
         with urllib.request.urlopen(endpoint, timeout=1) as response:
-            assert json.load(response) == {"language": "fr", "theme": "light", "quick_actions": ["page:files", "light:toggle", "home:Z", "page:canvas"], "camera_persistent": False, "canvas_single_nozzle_temp": None}
+            assert json.load(response) == prefs_get(
+                language="fr",
+                theme="light",
+                quick=["page:files", "light:toggle", "home:Z", "page:canvas"],
+            )
 
         # Themes are identifiers too (the frontend owns the palettes): lowercase words joined by hyphens.
         for theme in ("dracula", "solarized-light"):
@@ -107,6 +144,7 @@ with tempfile.TemporaryDirectory(prefix="cc2-preferences-") as temporary:
             with urllib.request.urlopen(endpoint, timeout=1) as response:
                 stored = json.load(response)
             assert stored["theme"] == theme and stored["language"] == "fr", stored
+
         for malformed_theme in (b'{"theme":"Dracula"}', b'{"theme":"../x"}', b'{"theme":""}', b'{"theme":"a"}',
                                 b'{"theme":"-nord"}', b'{"theme":"nord-"}', b'{"theme":"a--b"}',
                                 b'{"theme":"abcdefghijklmnopqrstuvwxyz"}', b'{"theme":"nord2"}'):

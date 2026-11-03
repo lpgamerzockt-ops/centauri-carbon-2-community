@@ -3682,57 +3682,89 @@ static int preferences_camera_persistent(void) {
     return preferences_camera_value(body) == 1;
 }
 
-/* Optional shared PLA nozzle target for Canvas material edits; -1 when unset. */
-static int preferences_canvas_temp_marker(const char *body, int *out) {
-    const char *value = strstr(body, "\"canvas_single_nozzle_temp\":");
+/* After print:break, restore auto refill on the next print:resume when it was on. -2 unset. */
+static int break_saved_auto_refill = -2;
+
+static int preferences_json_int(const char *body, const char *key, int *out) {
+    char marker[64];
+    snprintf(marker, sizeof(marker), "\"%s\":", key);
+    const char *value = strstr(body, marker);
     if (!value) return 0;
-    value += strlen("\"canvas_single_nozzle_temp\":");
+    value += strlen(marker);
     while (isspace((unsigned char)*value)) value++;
-    if (!strncmp(value, "null", 4)) {
-        *out = -1;
-        value += 4;
-    } else {
-        char *end = NULL;
-        long temp = strtol(value, &end, 10);
-        if (end == value || temp < 120 || temp > 320) return -1;
-        *out = (int)temp;
-        value = end;
-    }
+    char *end = NULL;
+    long n = strtol(value, &end, 10);
+    if (end == value) return -1;
+    *out = (int)n;
+    return 1;
+}
+
+static int preferences_json_bool(const char *body, const char *key, int *out) {
+    char marker[64];
+    snprintf(marker, sizeof(marker), "\"%s\":", key);
+    const char *value = strstr(body, marker);
+    if (!value) return 0;
+    value += strlen(marker);
+    while (isspace((unsigned char)*value)) value++;
+    if (!strncmp(value, "true", 4)) { *out = 1; value += 4; }
+    else if (!strncmp(value, "false", 5)) { *out = 0; value += 5; }
+    else return -1;
     while (isspace((unsigned char)*value)) value++;
     return (*value == ',' || *value == '}') ? 1 : -1;
 }
 
-static int preferences_canvas_single_nozzle_temp(void) {
+static int preferences_profile_valid(const char *code) {
+    return code && (!strcmp(code, "pla") || !strcmp(code, "petg"));
+}
+
+static void preferences_read_canvas_body(const char *body, char *profile, size_t profile_cap,
+    int *pla_min, int *pla_max, int *petg_min, int *petg_max, int *refill_off) {
+    snprintf(profile, profile_cap, "pla");
+    *pla_min = 190; *pla_max = 220; *petg_min = 230; *petg_max = 250; *refill_off = 1;
+    if (!body) return;
+    char code[8];
+    if (extract_json_string(body, "canvas_material_profile", code, sizeof(code)) && preferences_profile_valid(code))
+        snprintf(profile, profile_cap, "%s", code);
+    int v;
+    if (preferences_json_int(body, "canvas_profile_pla_min", &v) == 1 && v >= 120 && v <= 320) *pla_min = v;
+    if (preferences_json_int(body, "canvas_profile_pla_max", &v) == 1 && v >= 120 && v <= 320 && v > *pla_min) *pla_max = v;
+    if (preferences_json_int(body, "canvas_profile_petg_min", &v) == 1 && v >= 120 && v <= 320) *petg_min = v;
+    if (preferences_json_int(body, "canvas_profile_petg_max", &v) == 1 && v >= 120 && v <= 320 && v > *petg_min) *petg_max = v;
+    if (preferences_json_bool(body, "canvas_single_material_refill_off", &v) == 1) *refill_off = v;
+}
+
+static void preferences_canvas_defaults(char *profile, size_t profile_cap, int *pla_min, int *pla_max,
+    int *petg_min, int *petg_max, int *refill_off) {
     FILE *file = fopen(ui_preferences_path, "rb");
-    if (!file) return -1;
-    char body[640];
+    if (!file) { preferences_read_canvas_body(NULL, profile, profile_cap, pla_min, pla_max, petg_min, petg_max, refill_off); return; }
+    char body[768];
     size_t length = fread(body, 1, sizeof(body) - 1, file);
     fclose(file); body[length] = '\0';
-    int temp = -1;
-    if (preferences_canvas_temp_marker(body, &temp) == 1) return temp;
-    return -1;
+    preferences_read_canvas_body(body, profile, profile_cap, pla_min, pla_max, petg_min, petg_max, refill_off);
 }
 
 static void preferences_get_response(int fd) {
-    char temp_text[16], body[512];
-    int canvas_temp = preferences_canvas_single_nozzle_temp();
-    if (canvas_temp < 0) memcpy(temp_text, "null", 5);
-    else snprintf(temp_text, sizeof(temp_text), "%d", canvas_temp);
+    char profile[8], body[768];
+    int pla_min, pla_max, petg_min, petg_max, refill_off;
+    preferences_canvas_defaults(profile, sizeof(profile), &pla_min, &pla_max, &petg_min, &petg_max, &refill_off);
     int length = snprintf(body, sizeof(body),
-        "{\"language\":\"%s\",\"theme\":\"%s\",\"quick_actions\":[\"%s\",\"%s\",\"%s\",\"%s\"],\"camera_persistent\":%s,\"canvas_single_nozzle_temp\":%s}\n",
+        "{\"language\":\"%s\",\"theme\":\"%s\",\"quick_actions\":[\"%s\",\"%s\",\"%s\",\"%s\"],\"camera_persistent\":%s,"
+        "\"canvas_material_profile\":\"%s\",\"canvas_profile_pla_min\":%d,\"canvas_profile_pla_max\":%d,"
+        "\"canvas_profile_petg_min\":%d,\"canvas_profile_petg_max\":%d,\"canvas_single_material_refill_off\":%s}\n",
         preferences_language(), preferences_theme(), preferences_quick_action(0),
         preferences_quick_action(1), preferences_quick_action(2), preferences_quick_action(3),
-        preferences_camera_persistent() ? "true" : "false", temp_text);
+        preferences_camera_persistent() ? "true" : "false", profile, pla_min, pla_max, petg_min, petg_max,
+        refill_off ? "true" : "false");
     respond(fd, 200, "OK", "application/json; charset=utf-8", body, (size_t)length);
 }
 
 static void preferences_put_response(int fd, const char *body, size_t body_len) {
-    if (!body || body_len < 2 || body_len > 512) {
+    if (!body || body_len < 2 || body_len > 1024) {
         const char *error = "{\"saved\":false,\"error\":\"Invalid preferences\"}\n";
         respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
         return;
     }
-    char input[513];
+    char input[1025];
     size_t compact_len = 0;
     for (size_t index = 0; index < body_len; ++index) {
         if (!isspace((unsigned char)body[index])) input[compact_len++] = body[index];
@@ -3762,11 +3794,28 @@ static void preferences_put_response(int fd, const char *body, size_t body_len) 
                 !quick_action_valid(quick[slot])) valid_quick = 0;
         }
     }
-    int has_canvas_temp = strstr(input, "\"canvas_single_nozzle_temp\":") != NULL;
-    int canvas_temp = preferences_canvas_single_nozzle_temp();
-    int canvas_marker = has_canvas_temp ? preferences_canvas_temp_marker(input, &canvas_temp) : 1;
-    if ((!has_language && !has_theme && !has_quick && !has_camera && !has_canvas_temp) || (has_language && !valid_language) ||
-        !valid_quick || camera_enabled < 0 || canvas_marker < 0 ||
+    char profile_code[8], profile_in[8];
+    int has_profile = strstr(input, "\"canvas_material_profile\":") != NULL;
+    int pla_min = 190, pla_max = 220, petg_min = 230, petg_max = 250, refill_off = 1;
+    preferences_canvas_defaults(profile_code, sizeof(profile_code), &pla_min, &pla_max, &petg_min, &petg_max, &refill_off);
+    int profile_valid = 1;
+    if (has_profile) {
+        profile_valid = extract_json_string(input, "canvas_material_profile", profile_in, sizeof(profile_in)) &&
+            preferences_profile_valid(profile_in);
+        if (profile_valid) snprintf(profile_code, sizeof(profile_code), "%s", profile_in);
+    }
+    int has_pla_min = preferences_json_int(input, "canvas_profile_pla_min", &pla_min);
+    int has_pla_max = preferences_json_int(input, "canvas_profile_pla_max", &pla_max);
+    int has_petg_min = preferences_json_int(input, "canvas_profile_petg_min", &petg_min);
+    int has_petg_max = preferences_json_int(input, "canvas_profile_petg_max", &petg_max);
+    int has_refill_off = preferences_json_bool(input, "canvas_single_material_refill_off", &refill_off);
+    if (has_pla_min < 0 || has_pla_max < 0 || has_petg_min < 0 || has_petg_max < 0 || has_refill_off < 0)
+        profile_valid = 0;
+    if (pla_min < 120 || pla_max > 320 || pla_min >= pla_max || petg_min < 120 || petg_max > 320 || petg_min >= petg_max)
+        profile_valid = 0;
+    if ((!has_language && !has_theme && !has_quick && !has_camera && !has_profile &&
+         has_pla_min <= 0 && has_pla_max <= 0 && has_petg_min <= 0 && has_petg_max <= 0 && has_refill_off <= 0) ||
+        (has_language && !valid_language) || !valid_quick || camera_enabled < 0 || !profile_valid ||
         (has_theme && !valid_theme)) {
         const char *error = "{\"saved\":false,\"error\":\"Unsupported UI preference\"}\n";
         respond(fd, 400, "Bad Request", "application/json; charset=utf-8", error, strlen(error));
@@ -3774,19 +3823,19 @@ static void preferences_put_response(int fd, const char *body, size_t body_len) 
     }
     const char *language = valid_language ? language_code : preferences_language();
     const char *theme = valid_theme ? theme_code : preferences_theme();
-    if (!has_canvas_temp) canvas_temp = preferences_canvas_single_nozzle_temp();
     char temporary[512];
     if (snprintf(temporary, sizeof(temporary), "%s.new", ui_preferences_path) >= (int)sizeof(temporary)) {
         const char *error = "{\"saved\":false,\"error\":\"Preferences path is too long\"}\n";
         respond(fd, 500, "Internal Server Error", "application/json; charset=utf-8", error, strlen(error));
         return;
     }
-    char temp_text[16], canonical[512];
-    if (canvas_temp < 0) memcpy(temp_text, "null", 5);
-    else snprintf(temp_text, sizeof(temp_text), "%d", canvas_temp);
+    char canonical[768];
     int canonical_len = snprintf(canonical, sizeof(canonical),
-        "{\"language\":\"%s\",\"theme\":\"%s\",\"quick1\":\"%s\",\"quick2\":\"%s\",\"quick3\":\"%s\",\"quick4\":\"%s\",\"camera_persistent\":%s,\"canvas_single_nozzle_temp\":%s}\n",
-        language, theme, quick[0], quick[1], quick[2], quick[3], camera_enabled ? "true" : "false", temp_text);
+        "{\"language\":\"%s\",\"theme\":\"%s\",\"quick1\":\"%s\",\"quick2\":\"%s\",\"quick3\":\"%s\",\"quick4\":\"%s\",\"camera_persistent\":%s,"
+        "\"canvas_material_profile\":\"%s\",\"canvas_profile_pla_min\":%d,\"canvas_profile_pla_max\":%d,"
+        "\"canvas_profile_petg_min\":%d,\"canvas_profile_petg_max\":%d,\"canvas_single_material_refill_off\":%s}\n",
+        language, theme, quick[0], quick[1], quick[2], quick[3], camera_enabled ? "true" : "false",
+        profile_code, pla_min, pla_max, petg_min, petg_max, refill_off ? "true" : "false");
     FILE *file = fopen(temporary, "wb");
     int failed = !file;
     if (file) {
@@ -4037,6 +4086,19 @@ static void control_response(int fd,console_state *console,mqtt_client *mqtt,con
     }
     if(!strncmp(action,"canvas:material:",16)||!strncmp(action,"canvas:catalog:",15)||!strcmp(action,"canvas:reset-all")){mqtt->canvas_material_read_at=time(NULL)+1;mqtt->canvas_watch_until=time(NULL)+15;}
     if(z_action){z_offset_reference=z_reference;z_offset_session=1;z_offset_expected=z_next;z_offset_pending=1;z_offset_timed_out=0;clock_gettime(CLOCK_MONOTONIC,&z_offset_started);}
+    if(!strcmp(action,"print:break")){
+        if(mqtt->have_auto_refill){
+            break_saved_auto_refill=mqtt->auto_refill?1:0;
+            if(mqtt->auto_refill&&mqtt_set_auto_refill(mqtt,0)!=0)
+                fprintf(stderr,"print:break: auto refill disable request failed\n");
+        }else break_saved_auto_refill=-2;
+    }else if(!strcmp(action,"print:resume")){
+        if(break_saved_auto_refill>=0&&mqtt->have_auto_refill){
+            if(mqtt_set_auto_refill(mqtt,break_saved_auto_refill)!=0)
+                fprintf(stderr,"print:resume: auto refill restore request failed\n");
+        }
+        break_saved_auto_refill=-2;
+    }else if(!strcmp(action,"print:cancel"))break_saved_auto_refill=-2;
     const char *ok="{\"accepted\":true}\n";
     respond(fd,202,"Accepted","application/json; charset=utf-8",ok,strlen(ok));
 }

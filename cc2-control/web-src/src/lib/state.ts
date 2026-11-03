@@ -169,6 +169,10 @@ export function view(d: any) {
   const elapsed = Number(d?.print?.duration),
     remaining = Number(d?.print?.remaining)
   const homed = String(d?.motion?.homed_axes || '')
+  const printUuid = String(d?.print?.uuid || '')
+  const printerErrorCode = Number(d?.printer_error?.code)
+  const resumeBlocked1211 =
+    printerErrorCode === 1211 && printUuid && ls.get(`cc2-dismiss-1211-${printUuid}`) !== '1' && pausedEffective
   return {
     state,
     detail: subState(d?.machine),
@@ -195,7 +199,15 @@ export function view(d: any) {
       !sub.pausing &&
       !sub.resuming &&
       (/print/i.test(state) || /print/i.test(jobState)),
-    canResume: pausedEffective && !sub.resuming && !sub.pausing,
+    canBreak:
+      Boolean(d?.print?.filename) &&
+      !pausedEffective &&
+      !sub.pausing &&
+      !sub.resuming &&
+      (/print/i.test(state) || /print/i.test(jobState)),
+    canResume: pausedEffective && !sub.resuming && !sub.pausing && !resumeBlocked1211,
+    resumeBlocked1211,
+    printUuid,
     canCancelPrint: active && !sub.pausing && !sub.resuming,
     filamentLoading: sub.filamentLoading,
     elapsedText: active ? duration(elapsed) : '—',

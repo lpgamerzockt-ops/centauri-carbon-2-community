@@ -27,7 +27,12 @@ import { canvas, canvasColour, canvasHex, refreshCanvas } from '@/lib/canvas'
 import { canvasTimeline, clearCanvasTimeline, type ObservedPrinterPhase } from '@/lib/canvas-events'
 import { printer } from '@/lib/state'
 import { findSpool, g, openChooser, refreshSpools, spoolLabel, spools } from '@/lib/spools'
-import { canvasPreferences } from '@/lib/i18n'
+import {
+  canvasProfiles,
+  maybeDisableAutoRefillForSingleMaterial,
+  saveCanvasProfiles,
+  type CanvasMaterialProfile,
+} from '@/lib/canvas-profiles'
 import { printSubFlags } from '@/lib/machine'
 
 const I = { size: 16, strokeWidth: 1 }
@@ -56,9 +61,9 @@ export const Canvas = () => {
   const [dialog, setDialog] = useState(false)
   const [refillBusy, setRefillBusy] = useState(false)
   const [resetBusy, setResetBusy] = useState(false)
-  const [applyTempBusy, setApplyTempBusy] = useState(false)
+  const [applyProfileBusy, setApplyProfileBusy] = useState(false)
   const printerState = printer.use()
-  const singleNozzleTemp = canvasPreferences.use().singleNozzleTemp
+  const profiles = canvasProfiles.use()
   const subFlags = printSubFlags(printerState.data?.machine)
   const canvasMotionBlocked =
     subFlags.filamentLoading || subFlags.pausing || subFlags.resuming || subFlags.sub === 2501 || subFlags.sub === 2401
@@ -131,6 +136,8 @@ export const Canvas = () => {
     unassigned_head: 'canvas.reason_unassigned_head',
   }
   const reason = (key?: string) => t(reasons[key || ''] || 'canvas.reason_unavailable')
+  const actionBlockedHint = () =>
+    !idle && canvasMotionBlocked ? t('canvas.reason_pause_transition') : !idle ? t('canvas.reason_busy') : ''
   const sync = async () => {
     try {
       await post('/api/canvas/refresh')
@@ -139,24 +146,27 @@ export const Canvas = () => {
       notify(errText(e), 'error')
     }
   }
-  const applySingleNozzleTemp = async () => {
-    if (applyTempBusy || !idle || !model?.connected || singleNozzleTemp === null) return
-    const temp = singleNozzleTemp
-    if (!(await ask(tpl('canvas.apply_single_nozzle_temp_confirm', { temp }), true))) return
-    setApplyTempBusy(true)
+  const applyMaterialProfile = async (which: CanvasMaterialProfile) => {
+    if (applyProfileBusy || !idle || !model?.connected) return
+    const range = profiles[which]
+    const label = which.toUpperCase()
+    if (!(await ask(tpl('canvas.apply_profile_confirm', { profile: label, min: range.min, max: range.max }), true)))
+      return
+    setApplyProfileBusy(true)
     try {
-      for (let slot = 0; slot < 4; slot++) {
-        const tray = model?.trays[slot]
+      for (let s = 0; s < 4; s++) {
+        const tray = model?.trays[s]
         if (!tray || Number(tray.status) <= 0) continue
-        const material = String(tray.filament_type || tray.filament_name || 'PLA').replace(/[:]/g, '')
-        const colour = canvasHex(tray.filament_color, slot).slice(1)
-        const min = Math.max(120, temp - 30)
-        if (!(await control(`canvas:material:${slot}:${material}:${colour}:${min}:${temp}`, ''))) return
+        const material = String(tray.filament_type || tray.filament_name || label).replace(/[:]/g, '') || label
+        const colour = canvasHex(tray.filament_color, s).slice(1)
+        if (!(await control(`canvas:material:${s}:${material}:${colour}:${range.min}:${range.max}`, ''))) return
       }
-      notify(t('canvas.apply_single_nozzle_temp_done'))
+      await saveCanvasProfiles({ profile: which })
+      await maybeDisableAutoRefillForSingleMaterial()
+      notify(t('canvas.apply_profile_done'))
       setTimeout(refreshCanvas, 700)
     } finally {
-      setApplyTempBusy(false)
+      setApplyProfileBusy(false)
     }
   }
   // Readback comes from the printer: CC2 Control asks for the Canvas state again once the change is accepted.
@@ -211,7 +221,7 @@ export const Canvas = () => {
       'canvas.load',
       () => control(`canvas:load:${slot}`, tpl('canvas.load_filament_from_canvas_slot', { slot: slot + 1 })) as any,
       Boolean(selected?.load && idle),
-      reason(idle ? selected?.reason_load : 'busy'),
+      reason(idle ? selected?.reason_load : canvasMotionBlocked ? 'transition' : 'busy'),
     ],
     [
       ArrowBigDown,
@@ -406,7 +416,12 @@ export const Canvas = () => {
 
         {(!selected?.load || !selected?.unload || !idle) && (
           <p class="mt-2 text-xs text-muted" data-canvas-action-reason>
-            {!idle ? reason('busy') : !selected?.load ? reason(selected?.reason_load) : reason(selected?.reason_unload)}
+            {actionBlockedHint() ||
+              (!idle
+                ? reason('busy')
+                : !selected?.load
+                  ? reason(selected?.reason_load)
+                  : reason(selected?.reason_unload))}
           </p>
         )}
       </Card>
@@ -433,13 +448,23 @@ export const Canvas = () => {
             </Button>
             <p class="mt-1 text-xs text-muted">{t('canvas.auto_refill_hint')}</p>
           </div>
-          {singleNozzleTemp !== null && (
-            <div class="cc2-canvas-single-temp mt-3.5">
-              <Button wide disabled={!ok || !idle || applyTempBusy} onClick={() => void applySingleNozzleTemp()}>
-                {tpl('canvas.apply_single_nozzle_temp', { temp: singleNozzleTemp })}
+          <div class="cc2-canvas-profiles mt-3.5 grid gap-2">
+            <p class="text-xs text-muted">
+              {tpl('canvas.current_material_profile', { profile: profiles.profile.toUpperCase() })}
+            </p>
+            <div class="grid grid-cols-2 gap-2">
+              <Button wide disabled={!ok || !idle || applyProfileBusy} onClick={() => void applyMaterialProfile('pla')}>
+                {t('canvas.apply_profile_pla')}
+              </Button>
+              <Button
+                wide
+                disabled={!ok || !idle || applyProfileBusy}
+                onClick={() => void applyMaterialProfile('petg')}
+              >
+                {t('canvas.apply_profile_petg')}
               </Button>
             </div>
-          )}
+          </div>
           <CanvasUnload idle={idle} compact />
           <div class="cc2-canvas-reset">
             <Button disabled={!ok || !idle || resetBusy} onClick={resetAll}>
