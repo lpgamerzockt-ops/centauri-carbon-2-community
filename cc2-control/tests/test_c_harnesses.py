@@ -7,13 +7,14 @@ import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 FLAGS = ["-O2", "-std=c11", "-Wall", "-Wextra", "-Wpedantic", "-Werror", "-D_POSIX_C_SOURCE=200809L", "-pthread", *os.environ.get("CC2_TEST_CFLAGS", "").split()]
-BACKEND = [ROOT / "src/mqtt.c", ROOT / "src/console.c", ROOT / "src/control.c", ROOT / "src/panda.c", ROOT / "src/uds.c", ROOT / "src/network_status.c"]
+SPOOLS_STUB = ROOT / "tests/spools_tray_stub.c"
+BACKEND = [ROOT / "src/mqtt.c", ROOT / "src/console.c", ROOT / "src/control.c", ROOT / "src/panda.c", ROOT / "src/uds.c", ROOT / "src/network_status.c", SPOOLS_STUB]
 HARNESSES = {
     "test_panda_metadata.c": [],
     "test_backup.c": BACKEND,
-    "test_external_filament.c": [ROOT / "src/control.c"],
-    "test_canvas_state.c": [ROOT / "src/control.c"],
-    "test_canvas_recovery_load.c": [ROOT / "src/control.c"],
+    "test_external_filament.c": [ROOT / "src/control.c", SPOOLS_STUB],
+    "test_canvas_state.c": [ROOT / "src/control.c", SPOOLS_STUB],
+    "test_canvas_recovery_load.c": [ROOT / "src/control.c", SPOOLS_STUB],
     "test_app_update_guards.c": BACKEND,
     "test_gcode_metadata.c": [],
     "test_object_query.c": BACKEND,
@@ -63,7 +64,7 @@ HARNESSES = {
     "test_pending_autosave.c": BACKEND,
     "test_spools.c": BACKEND,
     "test_spoolman.c": BACKEND,
-    "test_control_actions.c": [ROOT / "src/control.c"],
+    "test_control_actions.c": [ROOT / "src/control.c", SPOOLS_STUB],
 }
 
 with tempfile.TemporaryDirectory(prefix="cc2-c-harness-") as temporary:
