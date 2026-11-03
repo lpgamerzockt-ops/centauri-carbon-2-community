@@ -19,11 +19,27 @@ import {
   timelapsePresetFromValues,
   type TimelapseQualityPreset,
 } from '@/lib/timelapse-presets'
+import {
+  INTERNAL_PICTURE,
+  INTERNAL_VIDEO,
+  pathsOnUsb,
+  resolutionPresetFromValues,
+  TIMELAPSE_RESOLUTION_PRESETS,
+  TIMELAPSE_TUNES,
+  type ResolutionPresetId,
+} from '@/lib/timelapse-resolutions'
 import { request } from '@/lib/api'
 import { openSettings } from '@/lib/state'
 
 const PRESETS = ['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow']
 const PROFILES = ['baseline', 'main', 'high']
+
+const RESOLUTION_LABEL: Record<ResolutionPresetId, Key> = {
+  '640x360': 'timelapse.resolution_640x360',
+  '854x480': 'timelapse.resolution_854x480',
+  '1280x720': 'timelapse.resolution_1280x720',
+  custom: 'timelapse.resolution_custom',
+}
 
 const Field = ({ label, htmlFor, children }: { label: Key; htmlFor?: string; children: preact.ComponentChildren }) => (
   <div class="my-2 grid gap-1 cc2-md:grid-cols-[170px_minmax(180px,480px)] cc2-md:items-center">
@@ -54,7 +70,25 @@ export const TimelapseSettingsPage = () => {
 
   const patch = (partial: Partial<TimelapseSettings>) => setForm(f => ({ ...f, ...partial }))
 
+  const usbRecording = pathsOnUsb(form.picture_dir, form.video_dir)
+
+  const setUsbRecording = (on: boolean) => {
+    if (on) {
+      if (!usbMounted) {
+        notify(t('timelapse.usb_not_mounted'), 'error')
+        return
+      }
+      patch({ picture_dir: TIMELAPSE_USB_PICTURE, video_dir: TIMELAPSE_USB_VIDEO })
+      return
+    }
+    patch({ picture_dir: INTERNAL_PICTURE, video_dir: INTERNAL_VIDEO })
+  }
+
   const save = async () => {
+    if (usbRecording && !usbMounted) {
+      notify(t('timelapse.usb_not_mounted'), 'error')
+      return
+    }
     if (!validateTimelapseForm(form)) {
       notify(t('timelapse.path_invalid'), 'error')
       return
@@ -88,6 +122,7 @@ export const TimelapseSettingsPage = () => {
   }
 
   const quality = timelapsePresetFromValues(form)
+  const resolution = resolutionPresetFromValues(form)
   const lowSpace = timelapseLowSpace(form.picture_space, form.video_space)
 
   return (
@@ -126,6 +161,23 @@ export const TimelapseSettingsPage = () => {
         </Select>
       </Field>
       <h3 class="mb-2 mt-3.5 text-base font-semibold">{t('timelapse.resolution')}</h3>
+      <Field label="timelapse.resolution_preset" htmlFor="tl-res">
+        <Select
+          id="tl-res"
+          value={resolution}
+          onChange={e => {
+            const v = e.currentTarget.value as ResolutionPresetId
+            if (v === 'custom') return
+            patch(TIMELAPSE_RESOLUTION_PRESETS[v])
+          }}
+        >
+          {(Object.keys(RESOLUTION_LABEL) as ResolutionPresetId[]).map(id => (
+            <option key={id} value={id}>
+              {t(RESOLUTION_LABEL[id])}
+            </option>
+          ))}
+        </Select>
+      </Field>
       <Field label="timelapse.width" htmlFor="tl-w">
         <Input
           id="tl-w"
@@ -168,9 +220,30 @@ export const TimelapseSettingsPage = () => {
           onInput={e => patch({ output_fps: Number(e.currentTarget.value) })}
         />
       </Field>
+      <h3 class="mb-2 mt-3.5 text-base font-semibold">{t('timelapse.encoder')}</h3>
+      <Field label="timelapse.profile" htmlFor="tl-prof">
+        <Select id="tl-prof" value={form.profile} onChange={e => patch({ profile: e.currentTarget.value })}>
+          {PROFILES.map(p => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="timelapse.level" htmlFor="tl-lv">
+        <Input id="tl-lv" value={form.level} onInput={e => patch({ level: e.currentTarget.value })} />
+      </Field>
+      <Field label="timelapse.tune" htmlFor="tl-tune">
+        <Select id="tl-tune" value={form.tune} onChange={e => patch({ tune: e.currentTarget.value })}>
+          {TIMELAPSE_TUNES.map(p => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </Select>
+      </Field>
       {quality === 'custom' ? (
         <>
-          <h3 class="mb-2 mt-3.5 text-base font-semibold">{t('timelapse.encoder')}</h3>
           <Field label="timelapse.bit_rate" htmlFor="tl-br">
             <Input
               id="tl-br"
@@ -201,18 +274,6 @@ export const TimelapseSettingsPage = () => {
               ))}
             </Select>
           </Field>
-          <Field label="timelapse.profile" htmlFor="tl-prof">
-            <Select id="tl-prof" value={form.profile} onChange={e => patch({ profile: e.currentTarget.value })}>
-              {PROFILES.map(p => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="timelapse.level" htmlFor="tl-lv">
-            <Input id="tl-lv" value={form.level} onInput={e => patch({ level: e.currentTarget.value })} />
-          </Field>
           <Field label="timelapse.pic_max_size" htmlFor="tl-pic">
             <Input
               id="tl-pic"
@@ -237,17 +298,19 @@ export const TimelapseSettingsPage = () => {
       <h3 class="mb-2 mt-3.5 text-base font-semibold">{t('timelapse.storage')}</h3>
       <p class="mb-2 text-xs text-muted">{t('timelapse.usb_hint')}</p>
       <p class="mb-2 text-xs text-amber">{t('timelapse.usb_risk')}</p>
-      {usbMounted ? (
-        <div class="mb-2">
-          <Button
-            variant="ghost"
-            class="h-auto px-2 py-1 text-xs"
-            disabled={busy}
-            onClick={() => patch({ picture_dir: TIMELAPSE_USB_PICTURE, video_dir: TIMELAPSE_USB_VIDEO })}
-          >
-            {t('timelapse.use_usb_paths')}
-          </Button>
-        </div>
+      {usbMounted && !usbRecording ? (
+        <p class="mb-2 text-xs text-cyan" role="status">
+          {t('timelapse.usb_recommend')}
+        </p>
+      ) : null}
+      <div class="my-2 flex flex-wrap items-center gap-2 cc2-md:pl-[170px]">
+        <Switch on={usbRecording} label={t('timelapse.record_on_usb')} onClick={() => setUsbRecording(!usbRecording)} />
+        <span class="text-sm">{t('timelapse.record_on_usb')}</span>
+      </div>
+      {usbRecording && !usbMounted ? (
+        <p class="mb-2 text-xs text-red" role="alert">
+          {t('timelapse.usb_not_mounted')}
+        </p>
       ) : null}
       <Field label="timelapse.picture_dir" htmlFor="tl-pdir">
         <Input

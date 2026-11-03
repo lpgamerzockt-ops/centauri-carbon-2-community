@@ -1378,5 +1378,17 @@
   "tuning.pressure_advance": "Pressure Advance (s)",
   "tuning.actual_pa": "Actual: {value} s",
   "tuning.disable_pa": "Disable (0)",
-  "tuning.pa_note": "Runtime only (0–1 s). Start G-code can override this value."
+  "tuning.pa_note": "Runtime only (0–1 s). Start G-code can override this value.",
+  "settings.theme_murin_carbon": "Murin Carbon",
+  "settings.theme_murin_amber": "Murin Amber",
+  "settings.theme_murin_slate": "Murin Slate",
+  "timelapse.resolution_preset": "Auflösungs-Voreinstellung",
+  "timelapse.resolution_640x360": "640 × 360 (Standard, USB-tauglich)",
+  "timelapse.resolution_854x480": "854 × 480 (FWVGA)",
+  "timelapse.resolution_1280x720": "1280 × 720 (HD)",
+  "timelapse.resolution_custom": "Benutzerdefiniert (Breite/Höhe manuell)",
+  "timelapse.record_on_usb": "Aufnahme auf USB-Stick",
+  "timelapse.usb_not_mounted": "USB-Stick nicht gemountet. Stick einstecken (Seite Dateien sollte USB anzeigen) oder USB-Aufnahme ausschalten.",
+  "timelapse.usb_recommend": "USB verfügbar — „Aufnahme auf USB-Stick“ aktivieren, damit Frames und MP4 unter /mnt/exUDISK/timelapse/… landen.",
+  "timelapse.tune": "x264-Tune"
 }

@@ -1378,5 +1378,17 @@
   "timelapse.quality_custom": "Custom (advanced encoder)",
   "timelapse.low_space_warning": "Low free space on the picture or video storage path (under 500 MB). Timelapse may fail — free space or choose another path (Settings → Timelapse & video).",
   "timelapse.rendering_banner": "The printer is creating the time-lapse video (machine state: timelapse generation). History refreshes when it finishes.",
-  "print.timelapse_low_space_warning": "Timelapse is enabled but storage space looks low for the configured picture/video paths. Check Settings → Timelapse & video before starting."
+  "print.timelapse_low_space_warning": "Timelapse is enabled but storage space looks low for the configured picture/video paths. Check Settings → Timelapse & video before starting.",
+  "settings.theme_murin_carbon": "Murin Carbon",
+  "settings.theme_murin_amber": "Murin Amber",
+  "settings.theme_murin_slate": "Murin Slate",
+  "timelapse.resolution_preset": "分辨率预设",
+  "timelapse.resolution_640x360": "640 × 360（默认，适合 USB）",
+  "timelapse.resolution_854x480": "854 × 480（FWVGA）",
+  "timelapse.resolution_1280x720": "1280 × 720（HD）",
+  "timelapse.resolution_custom": "自定义（手动宽高）",
+  "timelapse.record_on_usb": "录制到 U 盘",
+  "timelapse.usb_not_mounted": "U 盘未挂载。请插入 U 盘（文件页应显示 USB）或关闭 U 盘录制。",
+  "timelapse.usb_recommend": "U 盘可用 — 开启 U 盘录制，文件保存在 /mnt/exUDISK/timelapse/…",
+  "timelapse.tune": "x264 tune"
 }
