@@ -3,5 +3,9 @@
     "module/camera/timelapse_quality.h",
     "module/camera/timelapse_path.h",
     "module/camera/timelapse_runtime.h"
+  ],
+  "copy_sources": [
+    "module/camera/timelapse_path.c",
+    "module/camera/timelapse_runtime.c"
   ]
 }

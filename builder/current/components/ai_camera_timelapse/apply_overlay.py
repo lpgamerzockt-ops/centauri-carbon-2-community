@@ -4,8 +4,10 @@
 Usage:
   python3 apply_overlay.py /path/to/elegoo/extras/ai_camera
 
-Requires a full vendor checkout (not shipped in this repo). Copies overlay headers and
-patches listed files using the unified diff in overlay/MANIFEST.json.
+Requires a full vendor checkout (not shipped in this repo). Copies overlay
+headers and C files plus the shared parser. Encoder hunks still live in
+experimental/timelapse-phase3-ai_camera-sketch.patch and must be applied
+manually on the vendor tree. This script does not produce /opt/bin/ai_camera.
 """
 import json
 import shutil
@@ -31,12 +33,19 @@ def main() -> int:
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dst)
         print("copied", rel)
-    cfg_src = ROOT / "timelapse_cfg.c"
-    cfg_dst = target / "module/camera/timelapse_cfg.c"
-    cfg_dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(cfg_src, cfg_dst)
-    print("copied module/camera/timelapse_cfg.c")
-    print("Next: rebuild ai_camera with your vendor toolchain; see BUILD.md")
+    for rel in manifest.get("copy_sources", []):
+        src = OVERLAY / rel
+        dst = target / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+        print("copied", rel)
+    for name in ("timelapse_cfg.c", "timelapse_cfg.h"):
+        src = ROOT / name
+        dst = target / "module/camera" / name
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+        print("copied module/camera/" + name)
+    print("Next: apply experimental/timelapse-phase3-ai_camera-sketch.patch, add the copied .c files to the vendor CMake target, then rebuild with the printer GCC 6.5.0/glibc 2.23 toolchain. See BUILD.md. Do not replace /opt/bin/ai_camera until that ARM ELF exists.")
     return 0
 
 
