@@ -55,6 +55,13 @@ for locale, spot_checks in {
         "console.unlock_console_to_send_g_code":
             "Разблокируйте консоль, чтобы отправлять G-code…",
     },
+    "de": {
+        "job.object_exclusion": "Objektausschluss",
+        "console.unlock_console_to_send_g_code":
+            "Konsole entsperren, um G-code zu senden…",
+        "settings.language": "Sprache",
+        "app.dashboard": "Übersicht",
+    },
 }.items():
     data = json.loads((LOCALES / f"{locale}.json").read_text(encoding="utf-8"))
     for key, expected in spot_checks.items():

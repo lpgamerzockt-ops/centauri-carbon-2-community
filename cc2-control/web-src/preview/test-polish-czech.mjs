@@ -12,8 +12,8 @@ try {
   page.on('pageerror', e => errors.push(e.message))
   await page.goto(demo.url + '#settings')
   const language = page.locator('main select:has(option[value="pl"])')
-  for (const [code, name] of [['pl', 'Polski'], ['cs', 'Čeština']]) {
-    await page.getByRole('tab').nth(2).click()
+  for (const [code, name] of [['pl', 'Polski'], ['cs', 'Čeština'], ['de', 'Deutsch']]) {
+    await page.getByRole('tab').nth(3).click()
     assert.equal(await language.locator(`option[value="${code}"]`).textContent(), name)
     const labels = JSON.parse(await readFile(path.join(root, `public/locales/${code}.json`), 'utf8'))
     await language.selectOption(code)
@@ -48,8 +48,16 @@ try {
   await automatic.goto(demo.url + '#control')
   await automatic.waitForFunction(() => document.documentElement.lang === 'cs')
   await context.close()
+  const german = await browser.newContext({ locale: 'de-DE' })
+  await german.addInitScript(() => localStorage.setItem('cc2-fixture-preferences', '{"language":""}'))
+  const germanPage = await german.newPage()
+  await germanPage.goto(demo.url + '#control')
+  await germanPage.waitForFunction(() => document.documentElement.lang === 'de')
+  const deLabels = JSON.parse(await readFile(path.join(root, 'public/locales/de.json'), 'utf8'))
+  assert.equal(await germanPage.getByRole('heading', { name: deLabels['common.control'], exact: true }).count(), 1)
+  await german.close()
   assert.deepEqual(errors, [])
-  console.log('PASS: Polish/Czech selection, saved preference, regional detection, translated reset, responsive layouts')
+  console.log('PASS: Polish/Czech/German selection, saved preference, regional detection, translated reset, responsive layouts')
 } finally {
   await browser.close()
   await demo.cleanup()

@@ -19,7 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- German locale (`de.json`) key parity with English (1380 keys); Deutsch selectable in Settings → Appearance.
+- German locale (`de.json`): complete German UI strings for every English key (was mostly untranslated English copies). Deutsch in Settings → Appearance. Reported by **Manuel** (#1).
 
 ### Fixed
 
