@@ -24,7 +24,8 @@ Integration path for maintainers:
 
 1. Copy overlay onto vendor `ai_camera` with `apply_overlay.py` (see `BUILD.md`).
 2. Link `timelapse_cfg.c`, `timelapse_runtime.c`, `timelapse_path.c`; call `tl_runtime_load("/opt/usr/cfg/timelapse.cfg")` at startup.
-3. Rebuild `/opt/bin/ai_camera` and ship in a **full Community Firmware** release (e.g. V4.4.x+) with signed artifacts — not via `.cc2update` alone.
+3. Rebuild `/opt/bin/ai_camera` with the printer GCC 6.5.0/glibc 2.23 toolchain. This repo does **not** ship that toolchain or the vendor tree; overlay sources alone cannot emit an ELF.
+4. Once a real ARM32 hard-float ELF exists (with SHA-256 and backup commands), install it like CC2 Control: **root SSH** replace of `/opt/bin/ai_camera`, then restart the camera process. Do **not** use unsigned USB firmware. A full Dual-Trust OTA is optional, not required for a single-binary overlay.
 
 ## USB storage paths
 
@@ -32,4 +33,4 @@ CC2 validates `picture_dir` / `video_dir` under `/opt/usr/…` or `/mnt/exUDISK/
 
 ## Manuel / Murin fork
 
-Murin `optimierung` branch: UI presets (Low/Medium/High), disk-space hints, USB allowlist, German UI. **MP4 quality changes take effect only after Phase 3 firmware** that reads `timelapse.cfg`.
+Murin `optimierung` branch: UI presets (Low/Medium/High), disk-space hints, USB allowlist, German UI. **MP4 quality changes take effect only after a rebuilt `ai_camera` that reads `timelapse.cfg`.** Until that ARM ELF exists, do not replace the printer binary.
