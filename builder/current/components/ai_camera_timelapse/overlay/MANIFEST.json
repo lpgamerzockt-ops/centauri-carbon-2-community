@@ -1,7 +1,14 @@
 {
-  "copy_headers": [
+  "copy_overlay": [
     "module/camera/timelapse_quality.h",
     "module/camera/timelapse_path.h",
-    "module/camera/timelapse_runtime.h"
-  ]
+    "module/camera/timelapse_path.c",
+    "module/camera/timelapse_runtime.h",
+    "module/camera/timelapse_runtime.c"
+  ],
+  "copy_parser": [
+    ["timelapse_cfg.c", "module/camera/timelapse_cfg.c"],
+    ["timelapse_cfg.h", "module/camera/timelapse_cfg.h"]
+  ],
+  "vendor_hunks": "experimental/timelapse-phase3-ai_camera-sketch.patch"
 }
