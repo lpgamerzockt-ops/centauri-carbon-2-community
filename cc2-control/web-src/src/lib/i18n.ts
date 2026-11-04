@@ -2,6 +2,7 @@ import en from '../../public/locales/en.json'
 import { store, ls } from './store'
 import { notify, request } from './api'
 import { setQuickFromServer } from './quick'
+import { readCanvasProfilesFromApi } from './canvas-profiles'
 
 export const LANGUAGE_NAMES: Record<string, string> = {
   de: 'Deutsch',
@@ -48,6 +49,7 @@ const themeId = (mode: unknown) => (THEMES.some(x => x.id === mode) ? (mode as s
 export const theme = store({ mode: themeId(ls.get('cc2-theme')) })
 
 export const cameraPreferences = store({ persistent: false })
+
 export async function setPersistentCamera(persistent: boolean) {
   await request('/api/preferences', {
     method: 'PUT',
@@ -150,6 +152,7 @@ export async function loadUiPreferences() {
   try {
     const p = await boundedJson('/api/preferences')
     cameraPreferences.set({ persistent: p.camera_persistent === true })
+    readCanvasProfilesFromApi(p)
     setTheme(p.theme)
     setQuickFromServer(p.quick_actions)
     await setLanguage(p.language || detectLanguage()) // empty: nothing saved on the printer yet

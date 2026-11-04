@@ -248,11 +248,15 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
             return reject(reason,reason_cap,"Canvas recovery requires fresh idle telemetry, a present slot and an unassigned head");
         if(spools_tray_insert_stabilizing(slot))
             return reject(reason,reason_cap,"Canvas load waits for stable tray detection (about 15 s after filament detect flicker)");
+        if(canvas_load_refused(m))
+            return reject(reason,reason_cap,"Canvas loading is blocked while the print pauses, resumes, or filament is loading");
         snprintf(script,cap,"CANVAS_LOAD_FILAMENT CHANNEL=%d",slot);return 1;
     }
     if(sscanf(action,"canvas:load:%d",&slot)==1){
         if(printing(m))return reject(reason,reason_cap,"Canvas loading is blocked while printing");
         if(!m->have_machine_status||m->machine_status!=1)return reject(reason,reason_cap,"Canvas loading requires the printer to be idle");
+        if(canvas_load_refused(m))
+            return reject(reason,reason_cap,"Canvas loading is blocked while the print pauses, resumes, or filament is loading");
         if(slot<0||slot>3)return reject(reason,reason_cap,"Canvas slot must be 1..4");
         int end=0;
         if(sscanf(action,"canvas:load:%d%n",&slot,&end)!=1||action[end])return reject(reason,reason_cap,"Invalid Canvas action");
@@ -431,6 +435,8 @@ int control_build_script(const char *action,const mqtt_client *m,char *script,si
     }
     if(sscanf(action,"print:%31s",b)==1){
         if(strcmp(b,"pause")==0){if(!printing(m))return reject(reason,reason_cap,"No print is active");snprintf(script,cap,"PAUSE");return 1;}
+        /* No verified lighter native pause macro in CC2 docs; Break uses PAUSE and disables auto refill in main.c. */
+        if(strcmp(b,"break")==0){if(!printing(m))return reject(reason,reason_cap,"No print is active");snprintf(script,cap,"PAUSE");return 1;}
         if(strcmp(b,"resume")==0){snprintf(script,cap,"RESUME");return 1;}
         if(strcmp(b,"cancel")==0){if(!printing(m))return reject(reason,reason_cap,"No print is active");snprintf(script,cap,"CANCEL_PRINT");return 1;}
     }

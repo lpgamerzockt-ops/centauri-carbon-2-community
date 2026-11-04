@@ -84,3 +84,31 @@ export async function refreshCanvas() {
     canvas.set({ controls: [] }) // Keep material display, revoke permissions on failed refresh.
   }
 }
+
+const stableSlotStates: CanvasSlotState[] = ['present', 'loaded']
+
+/** Poll /api/canvas until mapped slots read present or loaded, or timeout. */
+export async function waitCanvasSlotsStable(slots: number[], timeoutMs = 8000) {
+  const unique = [...new Set(slots)].sort()
+  if (!unique.length) return { ok: true as const }
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    let failed: number | undefined
+    try {
+      const data = await request('/api/canvas')
+      const controls: CanvasSlotControl[] = Array.isArray(data?.slots) ? data.slots : []
+      for (const slot of unique) {
+        const c = controls.find(x => x.slot === slot)
+        if (!c || !stableSlotStates.includes(c.state)) {
+          failed = slot
+          break
+        }
+      }
+      if (failed === undefined) return { ok: true as const }
+    } catch {
+      failed = unique[0]
+    }
+    await new Promise(r => setTimeout(r, 500))
+  }
+  return { ok: false as const, failedSlot: unique[0] }
+}

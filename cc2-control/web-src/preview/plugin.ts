@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import type { Plugin } from 'vite'
 
@@ -69,6 +69,15 @@ const labels = {
     'preview.disconnected': 'Odpojeno',
     'preview.reset': 'Obnovit',
     'preview.state': 'Stav',
+  },
+  de: {
+    'preview.simulation': 'SIMULATION — kein Drucker',
+    'preview.idle': 'Leerlauf',
+    'preview.printing': 'Drucken',
+    'preview.paused': 'Pausiert',
+    'preview.disconnected': 'Getrennt',
+    'preview.reset': 'Zurücksetzen',
+    'preview.state': 'Status',
   },
 }
 const scenarios = ['idle', 'printing', 'paused', 'disconnected'] as const
@@ -513,10 +522,11 @@ export function previewPlugin(): Plugin {
           return
         }
         if (path.startsWith('/i18n/')) {
-          const lang = path.match(/^\/i18n\/(en|it|fr|zh|ru)\.json$/)?.[1]
-          if (!lang) return reply({ error: 'Unknown preview locale' }, 404)
+          const lang = path.match(/^\/i18n\/([a-z]{2}(?:-[A-Z]{2})?)\.json$/)?.[1]
+          const file = lang ? fileURLToPath(new URL(`../public/locales/${lang}.json`, import.meta.url)) : ''
+          if (!lang || !existsSync(file)) return reply({ error: 'Unknown preview locale' }, 404)
           res.setHeader('Content-Type', 'application/json')
-          res.end(readFileSync(fileURLToPath(new URL(`../public/locales/${lang}.json`, import.meta.url))))
+          res.end(readFileSync(file))
           return
         }
         if (!path.startsWith('/api/') && !path.startsWith('/__preview/')) return next()

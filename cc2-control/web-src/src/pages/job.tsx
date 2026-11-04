@@ -1,4 +1,4 @@
-import { Maximize2, Pause, Play, Square } from 'lucide-preact'
+import { Coffee, Maximize2, Pause, Play, Square } from 'lucide-preact'
 import { useEffect, useState } from 'preact/hooks'
 import { ObjectBedMap } from '@/components/object-bed-map'
 import { Card, CardHead, Page } from '@/components/ui/card'
@@ -9,31 +9,82 @@ import { t, tpl } from '@/lib/i18n'
 import { stateText } from '@/lib/machine'
 import { duration } from '@/lib/format'
 import { usePoll } from '@/lib/poll'
+import { printControlDebounced } from '@/lib/print-controls'
 import { printer, refreshPrinter, view } from '@/lib/state'
+import { ls } from '@/lib/store'
 import { objects, refreshObjects } from '@/lib/objects'
 
 const I = { size: 16, strokeWidth: 1 }
 
-export const JobControls = ({ v }: { v: ReturnType<typeof view> }) => (
-  <div class="mt-4 grid grid-cols-3 gap-2.5">
-    <Button class="min-w-0 px-2" disabled={!v.printing} onClick={() => control('print:pause')}>
-      <Pause {...I} />
-      {t('job.pause')}
-    </Button>
-    <Button class="min-w-0 px-2" disabled={!v.paused} onClick={() => control('print:resume')}>
-      <Play {...I} />
-      {t('job.resume')}
-    </Button>
-    <Button
-      class="min-w-0 px-2"
-      disabled={!(v.printing || v.paused)}
-      onClick={() => control('print:cancel', t('job.cancel_the_active_print'))}
-    >
-      <Square {...I} />
-      {t('common.cancel')}
-    </Button>
-  </div>
-)
+export const JobControls = ({ v }: { v: ReturnType<typeof view> }) => {
+  const [busy, setBusy] = useState<'pause' | 'break' | 'resume' | 'cancel' | null>(null)
+  const run = async (kind: 'pause' | 'break' | 'resume' | 'cancel', action: string, confirmation = '') => {
+    if (busy || printControlDebounced()) return
+    setBusy(kind)
+    try {
+      await control(action, confirmation)
+    } finally {
+      setBusy(null)
+    }
+  }
+  const dismiss1211 = () => {
+    if (v.printUuid) ls.set(`cc2-dismiss-1211-${v.printUuid}`, '1')
+    void refreshPrinter()
+  }
+  return (
+    <>
+      {v.printPhase ? (
+        <p role="status" class="mb-2 text-sm text-cyan">
+          {v.printPhase}
+        </p>
+      ) : null}
+      {v.resumeBlocked1211 ? (
+        <div role="alert" class="mb-2 rounded-md border border-edge bg-field p-2 text-sm">
+          <p>{t('job.error_1211_hint')}</p>
+          <Button class="mt-2" onClick={dismiss1211}>
+            {t('job.dismiss_error_hint')}
+          </Button>
+        </div>
+      ) : null}
+      <div class="mt-4 grid grid-cols-2 gap-2.5 cc2-sm:grid-cols-4">
+        <Button
+          class="min-w-0 px-2"
+          disabled={!v.canPause || busy !== null}
+          title={t('job.pause')}
+          onClick={() => void run('pause', 'print:pause')}
+        >
+          <Pause {...I} />
+          {t('job.pause')}
+        </Button>
+        <Button
+          class="min-w-0 px-2"
+          disabled={!v.canBreak || busy !== null}
+          title={t('job.break_hint')}
+          onClick={() => void run('break', 'print:break')}
+        >
+          <Coffee {...I} />
+          {t('job.break')}
+        </Button>
+        <Button
+          class="min-w-0 px-2"
+          disabled={!v.canResume || busy !== null}
+          onClick={() => void run('resume', 'print:resume')}
+        >
+          <Play {...I} />
+          {t('job.resume')}
+        </Button>
+        <Button
+          class="min-w-0 px-2"
+          disabled={!v.canCancelPrint || busy !== null}
+          onClick={() => void run('cancel', 'print:cancel', t('job.cancel_the_active_print'))}
+        >
+          <Square {...I} />
+          {t('common.cancel')}
+        </Button>
+      </div>
+    </>
+  )
+}
 
 export const Job = () => {
   const d = printer.use().data

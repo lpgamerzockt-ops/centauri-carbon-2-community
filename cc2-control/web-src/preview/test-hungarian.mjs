@@ -12,12 +12,12 @@ try {
   page.on('pageerror', e => errors.push(e.message))
   await page.goto(demo.url + '#settings')
   const language = page.locator('main select:has(option[value="hu"])')
-  await page.getByRole('tab').nth(2).click()
+  await page.getByRole('tab').nth(3).click()
   assert.deepEqual(await language.locator('option').allTextContents(),
-    ['Čeština', 'English', 'Español', 'Français', 'Italiano', 'Magyar', 'Polski', 'Русский', '中文'],
+    ['Čeština', 'Deutsch', 'English', 'Español', 'Français', 'Italiano', 'Magyar', 'Polski', 'Русский', '中文'],
     'language options follow displayed names, including accents, rather than language codes')
   for (const [code, name] of [['hu', 'Magyar']]) {
-    await page.getByRole('tab').nth(2).click()
+    await page.getByRole('tab').nth(3).click()
     assert.equal(await language.locator(`option[value="${code}"]`).textContent(), name)
     const labels = JSON.parse(await readFile(path.join(root, `public/locales/${code}.json`), 'utf8'))
     await language.selectOption(code)

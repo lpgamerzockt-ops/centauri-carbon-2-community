@@ -10,6 +10,7 @@ import { GithubIcon } from '@/components/github-icon'
 import { Activity, Info, Link, Palette, Plug, RefreshCw, Undo2, Archive, FileDown } from 'lucide-preact'
 import { errText, notify, post, request } from '@/lib/api'
 import { collectDiagnostics } from '@/lib/diagnostics'
+import { canvasProfiles, saveCanvasProfiles, type CanvasMaterialProfile } from '@/lib/canvas-profiles'
 import {
   setPersistentCamera,
   detectLanguage,
@@ -261,7 +262,44 @@ const Integrations = () => {
   const dbDefault = pandabreathDefaultHost(db.dragonbreath)
   const savedDbHost = pandabreathHost(db)
   const [dbHost, setDbHost] = useState(savedDbHost)
-  useEffect(() => setDbHost(savedDbHost), [savedDbHost]) // the firmware switch changes the default address
+  const canvasPrefs = canvasProfiles.use()
+  const [profile, setProfile] = useState<CanvasMaterialProfile>(canvasPrefs.profile)
+  const [plaMin, setPlaMin] = useState(String(canvasPrefs.pla.min))
+  const [plaMax, setPlaMax] = useState(String(canvasPrefs.pla.max))
+  const [petgMin, setPetgMin] = useState(String(canvasPrefs.petg.min))
+  const [petgMax, setPetgMax] = useState(String(canvasPrefs.petg.max))
+  const [refillOff, setRefillOff] = useState(canvasPrefs.singleMaterialRefillOff)
+  useEffect(() => {
+    setProfile(canvasPrefs.profile)
+    setPlaMin(String(canvasPrefs.pla.min))
+    setPlaMax(String(canvasPrefs.pla.max))
+    setPetgMin(String(canvasPrefs.petg.min))
+    setPetgMax(String(canvasPrefs.petg.max))
+    setRefillOff(canvasPrefs.singleMaterialRefillOff)
+  }, [canvasPrefs])
+  useEffect(() => setDbHost(savedDbHost), [savedDbHost])
+  const saveCanvasProfilesSettings = async () => {
+    const readRange = (min: string, max: string) => ({ min: Number(min), max: Number(max) })
+    const pla = readRange(plaMin, plaMax)
+    const petg = readRange(petgMin, petgMax)
+    for (const r of [pla, petg]) {
+      if (!Number.isFinite(r.min) || !Number.isFinite(r.max) || r.min < 120 || r.max > 320 || r.min >= r.max) {
+        notify(t('settings.canvas_material_profile_hint'), 'error')
+        return
+      }
+    }
+    try {
+      await saveCanvasProfiles({
+        profile,
+        pla,
+        petg,
+        singleMaterialRefillOff: refillOff,
+      })
+      notify(t('common.command_accepted'))
+    } catch (e) {
+      notify(errText(e), 'error')
+    }
+  }
   const saveDbHost = () => {
     if (setPandaBreathHost(dbHost)) notify(tpl('settings.pandabreath_address_saved', dbName))
     else notify(tpl('settings.pandabreath_address_invalid', { host: dbDefault }), 'error')
@@ -270,6 +308,87 @@ const Integrations = () => {
     <Card>
       <CardHead icon="plug" title="settings.integrations" sub="settings.service_configuration_for_local" />
       <SpoolmanIntegration />
+      <div class={row}>
+        <b>{t('settings.canvas_material_profile')}</b>
+        <span class="text-muted">{t('settings.canvas_material_profile_hint')}</span>
+        <div class="flex flex-col gap-2">
+          <div class="flex flex-wrap items-center gap-3">
+            <label class="flex items-center gap-1.5 text-sm">
+              <input
+                type="radio"
+                name="canvas-profile"
+                checked={profile === 'pla'}
+                onChange={() => setProfile('pla')}
+              />{' '}
+              PLA
+            </label>
+            <label class="flex items-center gap-1.5 text-sm">
+              <input
+                type="radio"
+                name="canvas-profile"
+                checked={profile === 'petg'}
+                onChange={() => setProfile('petg')}
+              />{' '}
+              PETG
+            </label>
+          </div>
+          <div class="grid gap-2 cc2-sm:grid-cols-2">
+            <div>
+              <div class="mb-1 text-xs font-semibold">{t('settings.canvas_profile_pla')}</div>
+              <div class="flex gap-2">
+                <Input
+                  type="number"
+                  min={120}
+                  max={320}
+                  class="w-24"
+                  value={plaMin}
+                  onInput={e => setPlaMin(e.currentTarget.value)}
+                  aria-label={t('settings.canvas_profile_min')}
+                />
+                <Input
+                  type="number"
+                  min={120}
+                  max={320}
+                  class="w-24"
+                  value={plaMax}
+                  onInput={e => setPlaMax(e.currentTarget.value)}
+                  aria-label={t('settings.canvas_profile_max')}
+                />
+              </div>
+            </div>
+            <div>
+              <div class="mb-1 text-xs font-semibold">{t('settings.canvas_profile_petg')}</div>
+              <div class="flex gap-2">
+                <Input
+                  type="number"
+                  min={120}
+                  max={320}
+                  class="w-24"
+                  value={petgMin}
+                  onInput={e => setPetgMin(e.currentTarget.value)}
+                  aria-label={t('settings.canvas_profile_min')}
+                />
+                <Input
+                  type="number"
+                  min={120}
+                  max={320}
+                  class="w-24"
+                  value={petgMax}
+                  onInput={e => setPetgMax(e.currentTarget.value)}
+                  aria-label={t('settings.canvas_profile_max')}
+                />
+              </div>
+            </div>
+          </div>
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={refillOff} onChange={e => setRefillOff(e.currentTarget.checked)} />
+            {t('settings.canvas_single_material_refill_off')}
+          </label>
+          <Button class="w-fit" onClick={() => void saveCanvasProfilesSettings()}>
+            {t('settings.save_address')}
+          </Button>
+        </div>
+      </div>
       <div class={row}>
         <b>{t('settings.panda_breath_compatibility')}</b>
         <span class="text-muted">{t('settings.read_only_compatibility_endpoint')}</span>

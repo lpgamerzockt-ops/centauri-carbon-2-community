@@ -126,6 +126,13 @@ int main(void){
     mqtt.registered=0;expect(!control_build_script("tune:flow:100",&mqtt,script,sizeof(script),reason,sizeof(reason)),"tuning blocked unregistered");mqtt.registered=1;
     mqtt.filename[0]=0;expect(!control_build_script("tune:speed:100",&mqtt,script,sizeof(script),reason,sizeof(reason)),"tuning blocked without active file");
 
+    mqtt.machine_status=2;strcpy(mqtt.print_state,"printing");strcpy(mqtt.filename,"job.gcode");
+    expect(control_build_script("print:pause",&mqtt,script,sizeof(script),reason,sizeof(reason))&&!strcmp(script,"PAUSE"),"print pause");
+    expect(control_build_script("print:break",&mqtt,script,sizeof(script),reason,sizeof(reason))&&!strcmp(script,"PAUSE"),"print break uses PAUSE");
+    mqtt.machine_status=1;
+    expect(!control_build_script("print:break",&mqtt,script,sizeof(script),reason,sizeof(reason)),"print break rejected without active print");
+    mqtt.machine_status=2;
+
     /* After homing or calibration the steppers stay energised and keep the
      * board fan running; they are released after ten stationary idle minutes. */
     const time_t limit=CONTROL_IDLE_MOTORS_SECONDS;
