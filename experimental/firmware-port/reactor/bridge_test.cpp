@@ -49,11 +49,11 @@ static void end_fn(void*,Shared){}
 uintptr_t test_resolve(uintptr_t a){
  switch(a){
 #define FN(A,F) case A:return reinterpret_cast<uintptr_t>(&F)
- FN(0xd0460,copy_shared);FN(0xcfd10,destroy_shared);FN(0x271c90,assign_shared);
- FN(0xdb05c,copy_json);FN(0xd1194,destroy_json);FN(0x109e4c,null_json);
- FN(0xc3ee8,empty_function);FN(0x1d62b4,call_void);FN(0x2738bc,call_double);FN(0x272350,call_json);
- FN(0x26b8b8,unregister_timer);FN(0x26a4ec,complete);FN(0x2720d4,push_wait);
- FN(0x26dddc,get_current);FN(0x26c0c4,pause_fn);FN(0x35ee3c,monotonic);FN(0xbf70c,poll_fn);FN(0x26d3a0,end_fn);
+ FN(0xd2990,copy_shared);FN(0xd2240,destroy_shared);FN(0x2741c0,assign_shared);
+ FN(0xdd58c,copy_json);FN(0xd36c4,destroy_json);FN(0x10c37c,null_json);
+ FN(0xc6418,empty_function);FN(0x1d87e4,call_void);FN(0x275dec,call_double);FN(0x274880,call_json);
+ FN(0x26dde8,unregister_timer);FN(0x26ca1c,complete);FN(0x274604,push_wait);
+ FN(0x27030c,get_current);FN(0x26e5f4,pause_fn);FN(0x35cbd0,monotonic);FN(0xbf628,poll_fn);FN(0x26f8d0,end_fn);
 #undef FN
  default:throw std::runtime_error("unmocked vendor function");
  }

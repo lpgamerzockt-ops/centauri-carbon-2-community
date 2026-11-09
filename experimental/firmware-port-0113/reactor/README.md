@@ -78,6 +78,11 @@ to derive them. It does **not** contain:
   follow-up resolving offset `108` (confirmed) and narrowing offsets
   `20`/`248` and the exception/unwind boundary; still-open items remain
   marked BLOCKER.
+- [`ABI_BLOCKER_RESOLUTION_2_0113.md`](ABI_BLOCKER_RESOLUTION_2_0113.md) —
+  further follow-up: offset `240` (map member base) confirmed by direct
+  disassembly; offsets `20`/`248` upgraded to "indirectly well-supported
+  via stable libstdc++ ABI," explicitly not claimed as directly
+  confirmed.
 - [`ARM_TEST_PLAN.md`](ARM_TEST_PLAN.md) — acceptance criteria and abort
   conditions for the still-outstanding hardware/ABI steps.
 

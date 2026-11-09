@@ -33,11 +33,11 @@ void *at(void *p,size_t offset){return static_cast<byte*>(p)+offset*(sizeof(void
 struct Shared {
  void *object=nullptr,*control=nullptr;
  Shared()=default;
- Shared(const Shared &other){original<void(*)(void*,const void*)>(0xd0460)(this,&other);}
+ Shared(const Shared &other){original<void(*)(void*,const void*)>(0xd2990)(this,&other);}
  Shared(Shared &&other) noexcept:object(other.object),control(other.control){other.object=other.control=nullptr;}
  Shared &operator=(Shared other) noexcept {std::swap(object,other.object);std::swap(control,other.control);return *this;}
- ~Shared(){original<void(*)(void*)>(0xcfd10)(this);}
- static Shared from(const void *slot){Shared result;original<void(*)(void*,const void*)>(0xd0460)(&result,slot);return result;}
+ ~Shared(){original<void(*)(void*)>(0xd2240)(this);}
+ static Shared from(const void *slot){Shared result;original<void(*)(void*,const void*)>(0xd2990)(&result,slot);return result;}
 };
 #if !defined(CC2_SYNTAX_ONLY) && !defined(CC2_BRIDGE_TEST)
 static_assert(sizeof(Shared)==8,"shared_ptr bridge size");
@@ -53,7 +53,7 @@ void drop_at(void *slot,size_t index){
  Vec v=view(slot);size_t n=count(v,sizeof(Shared));if(index>=n)throw std::runtime_error("CC2 reactor erase invariant");
  Shared release=Shared::from(v.begin+index*sizeof(Shared));
  // Release the container's original count, then transfer remaining ownership.
- original<void(*)(void*)>(0xcfd10)(v.begin+index*sizeof(Shared));
+ original<void(*)(void*)>(0xd2240)(v.begin+index*sizeof(Shared));
  std::memmove(v.begin+index*sizeof(Shared),v.begin+(index+1)*sizeof(Shared),(n-index-1)*sizeof(Shared));
  v.end-=sizeof(Shared);std::memset(v.end,0,sizeof(Shared));std::memcpy(slot,&v,sizeof(v));
 }
@@ -72,14 +72,14 @@ Shared take_callback(void *owner,void *callback){
 }
 struct Json {
  alignas(8) byte data[16];bool initialized=false;
- ~Json(){if(initialized)original<void(*)(void*)>(0xd1194)(data);}
- void copy(const void *source){original<void(*)(void*,const void*)>(0xdb05c)(data,source);initialized=true;}
+ ~Json(){if(initialized)original<void(*)(void*)>(0xd36c4)(data);}
+ void copy(const void *source){original<void(*)(void*,const void*)>(0xdd58c)(data,source);initialized=true;}
 };
 const double never=9999999999999999.0;
-Shared current(void *owner){return original<Shared(*)(void*)>(0x26dddc)(owner);}
+Shared current(void *owner){return original<Shared(*)(void*)>(0x27030c)(owner);}
 Shared dispatch(void *owner){return Shared::from(at(owner,144));}
-void end_greenlet(void *owner,const Shared &old){original<void(*)(void*,Shared)>(0x26d3a0)(owner,old);}
-double now(){return original<double(*)()>(0x35ee3c)();}
+void end_greenlet(void *owner,const Shared &old){original<void(*)(void*,Shared)>(0x26f8d0)(owner,old);}
+double now(){return original<double(*)()>(0x35cbd0)();}
 bool process(void *owner){return *static_cast<byte*>(at(owner,12))!=0;}
 double &next_timer(void *owner){return *static_cast<double*>(at(owner,32));}
 void *handler(void *owner,int fd){
@@ -94,8 +94,9 @@ void *handler(void *owner,int fd){
  return nullptr;
 }
 void *handler_object(void *owner,int fd){void *slot=handler(owner,fd),*p=nullptr;if(slot)std::memcpy(&p,slot,sizeof(p));return p;}
-bool callable(void *function){return original<bool(*)(const void*)>(0xc3ee8)(function)==false;}
+bool callable(void *function){return original<bool(*)(const void*)>(0xc6418)(function)==false;}
 struct Event {pollfd fd;Shared handle;};
+extern "C" void cc2_abi_smoke_test(void* owner, void* handler);
 static unsigned long callback_count=0,exception_count=0;
 static void exception_note(const char *where) noexcept {
  ++exception_count;
@@ -126,11 +127,11 @@ extern "C" double cc2_callback(void *self,double eventtime){
  Shared keep=take_callback(owner,self);
  try{
   Shared timer=Shared::from(at(self,8));
-  original<void(*)(void*,Shared)>(0x26b8b8)(owner,timer);
+  original<void(*)(void*,Shared)>(0x26dde8)(owner,timer);
   Json result;
-  original<void(*)(void*,const void*,double)>(0x272350)(result.data,at(self,16),eventtime);result.initialized=true;
+  original<void(*)(void*,const void*,double)>(0x274880)(result.data,at(self,16),eventtime);result.initialized=true;
   Shared completion=Shared::from(at(self,32));
-  if(completion.object){Json copy;copy.copy(result.data);original<void(*)(void*,void*)>(0x26a4ec)(completion.object,copy.data);}
+  if(completion.object){Json copy;copy.copy(result.data);original<void(*)(void*,void*)>(0x26ca1c)(completion.object,copy.data);}
   ++callback_count;return never;
  }catch(...){exception_note("callback");throw;}
 }
@@ -145,7 +146,7 @@ extern "C" double cc2_timers(void *owner,double eventtime,bool busy){
   if(!t.object)continue;
   double &wake=*static_cast<double*>(at(t.object,16));double waketime=wake;
   if(eventtime>=waketime){
-   wake=never;wake=waketime=original<double(*)(const void*,double)>(0x2738bc)(t.object,eventtime);
+   wake=never;wake=waketime=original<double(*)(const void*,double)>(0x275dec)(t.object,eventtime);
    if(previous.object!=dispatch(owner).object){next=std::min(next,waketime);end_greenlet(owner,previous);return 0.0;}
   }
   next=std::min(next,waketime);
@@ -155,14 +156,14 @@ extern "C" double cc2_timers(void *owner,double eventtime,bool busy){
 extern "C" void cc2_poll(void *owner){
  Shared previous=current(owner);
  // Assignment into original shared_ptr storage through its original operator=.
- original<void(*)(void*,const void*)>(0x271c90)(at(owner,144),&previous);
+ original<void(*)(void*,const void*)>(0x2741c0)(at(owner,144),&previous);
  bool busy=true;double eventtime=now();
  try{
   while(process(owner)){
    status_note(owner,eventtime);
    double timeout=cc2_timers(owner,eventtime,busy);busy=false;
    Vec v=view(at(owner,264));size_t n=count(v,sizeof(pollfd));
-   int res=original<int(*)(pollfd*,nfds_t,int)>(0xbf70c)(reinterpret_cast<pollfd*>(v.begin),n,static_cast<int>(std::ceil(timeout*1000.0)));
+   int res=original<int(*)(pollfd*,nfds_t,int)>(0xbf628)(reinterpret_cast<pollfd*>(v.begin),n,static_cast<int>(std::ceil(timeout*1000.0)));
    eventtime=now();if(res<=0)continue;
    v=view(at(owner,264));n=count(v,sizeof(pollfd));
    std::vector<Event> ready;ready.reserve(n);
@@ -174,19 +175,20 @@ extern "C" void cc2_poll(void *owner){
    }
    for(auto &event:ready){
     const pollfd &fd=event.fd;void *h=event.handle.object;
+    cc2_abi_smoke_test(owner,h);
     if(handler_object(owner,fd.fd)!=h)continue;
     busy=true;
     if((fd.revents&(POLLIN|POLLHUP))&&callable(h)){
-     original<void(*)(const void*,double)>(0x1d62b4)(h,eventtime);
+     original<void(*)(const void*,double)>(0x1d87e4)(h,eventtime);
      if(previous.object!=dispatch(owner).object){end_greenlet(owner,previous);eventtime=now();break;}
     }
     if(handler_object(owner,fd.fd)==h&&(fd.revents&POLLOUT)&&callable(at(h,16))){
-     original<void(*)(const void*,double)>(0x1d62b4)(at(h,16),eventtime);
+     original<void(*)(const void*,double)>(0x1d87e4)(at(h,16),eventtime);
      if(previous.object!=dispatch(owner).object){end_greenlet(owner,previous);eventtime=now();break;}
     }
    }
   }
-  Shared empty;original<void(*)(void*,const void*)>(0x271c90)(at(owner,144),&empty);
+  Shared empty;original<void(*)(void*,const void*)>(0x2741c0)(at(owner,144),&empty);
  }catch(...){exception_note("poll");throw;}
 }
 struct WaitGuard {
@@ -199,19 +201,42 @@ struct WaitGuard {
 // Original nontrivial JSON return uses the ARM hidden result pointer in r0.
 extern "C" void cc2_wait(void *out,void *self,double waketime,const void *fallback){
  void *result=at(self,8);
- if(original<bool(*)(const void*)>(0x109e4c)(result)){
+ if(original<bool(*)(const void*)>(0x10c37c)(result)){
   void *owner;std::memcpy(&owner,self,sizeof(owner));Shared wait=current(owner);
   if(!wait.object)throw std::runtime_error("CC2 completion has no current coroutine");
   void *waiting=at(self,24);
-  original<void(*)(void*,const void*)>(0x2720d4)(waiting,&wait);
+  original<void(*)(void*,const void*)>(0x274604)(waiting,&wait);
   WaitGuard guard{waiting,wait.object};
-  try{original<double(*)(void*,double)>(0x26c0c4)(owner,waketime);}
+  try{original<double(*)(void*,double)>(0x26e5f4)(owner,waketime);}
   catch(...){exception_note("completion wait");throw;}
-  if(original<bool(*)(const void*)>(0x109e4c)(result)){
-   original<void(*)(void*,const void*)>(0xdb05c)(out,fallback);return;
+  if(original<bool(*)(const void*)>(0x10c37c)(result)){
+   original<void(*)(void*,const void*)>(0xdd58c)(out,fallback);return;
   }
  }
- original<void(*)(void*,const void*)>(0xdb05c)(out,result);
+ original<void(*)(void*,const void*)>(0xdd58c)(out,result);
+}
+
+// --- ABI Smoke Test (einmalig pro Prozess) ---
+static bool smoke_test_done=false;
+extern "C" void cc2_abi_smoke_test(void* owner, void* handler) {
+    if (smoke_test_done || !owner || !handler) return;
+    smoke_test_done = true;
+
+    // Offset 16 im ReactorFileHandler-Objekt
+    // (Disassembly-bestätigt: add r3, r3, #16 nach shared_ptr::operator->)
+    void* field_at_16 = *(void**)((char*)handler + 16);
+
+    // Offset 240 in PollReactor (Map-Basis)
+    // (Disassembly-bestätigt: add r3, r3, #240 vor map::operator[])
+    void* map_at_240 = *(void**)((char*)owner + 240);
+
+    dprintf(2, "[cc2-abi-smoke] handler+16 = %p\n", field_at_16);
+    dprintf(2, "[cc2-abi-smoke] reactor+240 = %p\n", map_at_240);
+
+    if (!field_at_16)
+        dprintf(2, "[cc2-abi-smoke] WARNUNG: handler+16 ist null\n");
+    if (!map_at_240)
+        dprintf(2, "[cc2-abi-smoke] WARNUNG: reactor+240 ist null\n");
 }
 }
 #if !defined(CC2_SYNTAX_ONLY) && !defined(CC2_BRIDGE_TEST)
@@ -229,10 +254,10 @@ __attribute__((constructor)) static void activate(){
  char path[512];ssize_t n=readlink("/proc/self/exe",path,sizeof(path)-1);if(n<0)fail("exe path");path[n]=0;
  if(std::strcmp(path,"/opt/usr/cc2-reactor-runtime-v2/elegoo_printer"))fail("unsupported executable path");
  for(const auto &f:fingerprints)if(std::memcmp(reinterpret_cast<void*>(f.address),f.bytes,8))fail("original instruction fingerprint");
- patch(0x26ab5c,reinterpret_cast<void*>(&bridge::cc2_callback));
- patch(0x26ccac,reinterpret_cast<void*>(&bridge::cc2_timers));
- patch(0x26e3a8,reinterpret_cast<void*>(&bridge::cc2_poll));
- patch(0x26a640,reinterpret_cast<void*>(&bridge::cc2_wait));
+ patch(0x26d08c,reinterpret_cast<void*>(&bridge::cc2_callback));
+ patch(0x26f1dc,reinterpret_cast<void*>(&bridge::cc2_timers));
+ patch(0x2708d8,reinterpret_cast<void*>(&bridge::cc2_poll));
+ patch(0x26cb70,reinterpret_cast<void*>(&bridge::cc2_wait));
  int marker=open("/opt/usr/cc2-reactor-runtime-v2/activation.marker",O_WRONLY|O_CREAT|O_TRUNC,0600);
  if(marker<0)fail("activation marker");
  dprintf(marker,"pid=%ld callback=%p timers=%p poll=%p wait=%p\n",static_cast<long>(getpid()),reinterpret_cast<void*>(&bridge::cc2_callback),reinterpret_cast<void*>(&bridge::cc2_timers),reinterpret_cast<void*>(&bridge::cc2_poll),reinterpret_cast<void*>(&bridge::cc2_wait));close(marker);

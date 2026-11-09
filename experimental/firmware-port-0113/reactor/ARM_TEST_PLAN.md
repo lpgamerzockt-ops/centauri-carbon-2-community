@@ -34,7 +34,7 @@ recorded for any stage:
 |---|---|
 | Vendor `elegoo_printer` SHA-256 | `688b7bf8a27762d56b35d9738ea5b0c3d45580b402e122b0f77ee49dab1a8cfd` (confirm against the actual file under test, not assumed) |
 | `libcolib.so` SHA-256 | `14288a4a73c339b039dd89597618ebb05702f90d668b76f74019d5d15ce67403` (confirm against the actual file under test) |
-| `libcc2-reactor-v2.so` SHA-256 | Record at build time; there is no pinned value yet for the 02.01.01.13 mapping — any value recorded here is this test run's own artifact, not a qualified reference |
+| `libcc2-reactor-v2.so` SHA-256 | A 0113-addressed candidate now exists: `de333cd9a0989de4c903fea369a503d2e587bd317e79a9e0c2bfddd0bb6fe424` (built from the repository's own, now-updated `reactor_module.cpp`/`fingerprints.h`, with the §2-toolchain equivalent — see `HASH_LEDGER.md` §2/§3b). This is this session's own build, not an externally qualified reference; re-confirm against the actual file under test before any step below. |
 | Source commit | The exact commit of `experimental/firmware-port/reactor/{port-manifest.json,reactor_module.cpp}` the `.so` was built from |
 | Toolchain fingerprint | Compiler version string (`<prefix>-g++ -dumpversion` and `--version`), target triple, sysroot path, the actual linked `libstdc++`/`libc` version (not just major version), and the full build-flag set (`-mcpu`, `-mfpu`, `-mfloat-abi`, exception/RTTI flags) — **all of it**, not "GCC 6 or similar" |
 | Build command | The exact invocation used, verbatim, including environment (`PREFIX`, `PATH`) |
