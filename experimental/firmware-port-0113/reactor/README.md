@@ -62,6 +62,9 @@ to derive them. It does **not** contain:
   instruction-level comparison of all four hook functions between the 07
   and 0113 builds, and a correction of an earlier conflation with an
   unrelated field in the existing `port-manifest.json`.
+- [`SUPPORT_FUNCTIONS_DIFF_0113.md`](SUPPORT_FUNCTIONS_DIFF_0113.md) — the
+  same comparison extended to the other 18 vendor addresses the bridge
+  calls into (not just the 4 patch targets).
 - [`ARM_TEST_PLAN.md`](ARM_TEST_PLAN.md) — acceptance criteria and abort
   conditions for the still-outstanding hardware/ABI steps.
 
