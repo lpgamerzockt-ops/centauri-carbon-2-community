@@ -67,8 +67,38 @@ met and recorded under "Result log" — never from artifact identity alone.
 - [ ] Full backup of the current on-device state (`/opt/bin/elegoo_printer`,
   `/opt/lib/libcolib.so`, `/opt/usr/cc2-reactor-runtime-v2/`, relevant
   init scripts) taken and its own hash recorded.
+  - **Status 2026-11-09: PARTIAL — not ticked.** Copied from the device
+    to the operator's machine and hashed there:
+
+    | File | SHA-256 of the local copy | Matches the hash read on the device? |
+    |---|---|---|
+    | `/opt/bin/elegoo_printer` | `688b7bf8a27762d56b35d9738ea5b0c3d45580b402e122b0f77ee49dab1a8cfd` | yes |
+    | `/opt/lib/libcolib.so` | `14288a4a73c339b039dd89597618ebb05702f90d668b76f74019d5d15ce67403` | yes |
+    | `/etc/init.d/cc2-reactor-launch` (before the `fallback()` fix) | `a8a736fdedba6efb5b3ddc1e636c33da33533083708374249493e3d97e9c0da8` | md5 `9e15e111…` matched the device |
+    | `/opt/usr/cc2-reactor-runtime-v2/` without its `elegoo_printer` copy (tar archive) | `0aa007c4f4e2ff820de73ae5f363d95667ce0a5bc47b8fdb3c7ad1923cadb94f` | archive lists and extracts cleanly; contains `libcc2-reactor-v2.so` `8f78646d…` |
+
+  - Not in the backup: `/opt/bin/ec-eeb001-gui`, `/opt/bin/ai_camera`,
+    `/opt/inst/daemon-000/daemon-000`, the current `/etc/init.d/printer`
+    and `/opt/bin/run_printer.sh`, and `/opt/inst/cc2-reactor/`. The
+    runtime directory's own `elegoo_printer` copy was left out of the
+    archive; that it equals `/opt/bin/elegoo_printer` was not recorded.
+    Two earlier full-directory archive attempts were truncated in transfer
+    and are not usable.
 - [ ] Rollback path verified working *before* any new artifact is
   installed — not assumed from a prior, unrelated rollback test.
+  - **Status 2026-11-09: NOT VERIFIED — not ticked.** One attempt was
+    made to write the backed-up, byte-identical `elegoo_printer` back to
+    `/opt/bin/elegoo_printer` with `scp` while the printer process was
+    running. It failed before writing:
+    `scp: dest open "/opt/bin/elegoo_printer": Failure`. The device file
+    hash was unchanged afterwards. The cause (file in use, mount state,
+    permissions, free space) has not been determined, so no working
+    rollback procedure for the binaries exists yet.
+  - A file under `/etc/init.d/` was replaced by `scp` successfully the
+    same day (the launcher fix), so writing to that path works; this says
+    nothing about `/opt/bin/`.
+  - Until this item is verified, no print test and no test that installs
+    or replaces a binary is started.
 - [ ] Start/stop procedure for the test build, verified against the actual
   launcher scripts in this repository (read directly, not assumed):
   - **Start (test-candidate path):** `experimental/firmware-port/launcher.sh`
@@ -182,6 +212,12 @@ Record for every stage, as it is actually run (do not pre-fill):
 
 Every row starts `NOT RUN`. `BLOCKED` is used when a prerequisite gate or
 section-3 item is not satisfied yet — never silently skipped.
+
+State on 2026-11-09: no stage of section 5 has been run; the reactor is
+disabled on the test device. The hardware tests H1–H3 of
+[`../TEST_MATRIX.md`](../TEST_MATRIX.md) (Z-offset menu during a print,
+camera with remote access, OrcaSlicer upload/start/cancel) have not been
+run either, and are blocked by the unverified rollback path in section 3.
 
 ## 7. Abort and rollback
 
