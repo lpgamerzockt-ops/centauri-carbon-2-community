@@ -121,9 +121,10 @@ met and recorded under "Result log" — never from artifact identity alone.
     command) failed to start `elegoo_printer` (`error while loading shared
     libraries: libcolib.so: cannot open shared object file`). The normal
     boot path was not affected, because `/etc/init.d/printer` sources
-    `/etc/profile`, which exports `LD_LIBRARY_PATH=/opt/lib`. **Fixed** in
-    this repository (`c0f9fc0b`) and directly on the affected device;
-    verified by a real `run_printer.sh stop`/`start` cycle over SSH through
+    `/etc/profile`, which exports `LD_LIBRARY_PATH=/opt/lib`. **Fixed** directly
+    on the affected device (the repository change `c0f9fc0b` broke
+    dependent hash pins and was reverted, both within fork PR #1, so this repository's `firmware-launcher.sh` still has the
+    defect); verified by a real `run_printer.sh stop`/`start` cycle over SSH through
     the actual `fallback()` path (new clean process instance, no
     `LD_PRELOAD`, no error). For any manual start/stop step in this plan,
     use a device that has this fix, or source `/etc/profile` first.

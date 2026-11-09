@@ -68,7 +68,7 @@ supported by the available evidence; it is not a formal proof that no
 single byte was ever written anywhere (that would require a full memory
 diff, which was not performed).
 
-## 4. The `fallback()` bug: confirmed, and now fixed
+## 4. The `fallback()` bug: confirmed; fixed on the device, open in the repository
 
 The real, on-device start chain (read directly, not assumed from the
 repository's committed copy, which turned out to match it) is:
@@ -112,10 +112,10 @@ At the time this was first found, `/etc/init.d/cc2-reactor-launch` itself
 had **not** been edited: re-read right after the incident, its `md5sum`
 was `9e15e1116264c2438b388f7052db57ac` and its `fallback()` body was
 byte-for-byte the same as quoted above — still missing the
-`LD_LIBRARY_PATH` export. This was an identical bug to the one already
+`LD_LIBRARY_PATH` export. The same bug is
 present in this repository's own committed
 [`builder/current/components/reactor/firmware-launcher.sh`](../../../builder/current/components/reactor/firmware-launcher.sh),
-whose `fallback()` had the same shape and the same missing export.
+whose `fallback()` has the same shape and the same missing export.
 
 **Correction (added after a follow-up check): the failure depends on the
 calling environment, and the normal boot path was not affected.** An
@@ -157,24 +157,26 @@ outside a profile-sourced shell. The fix in §7 removes that dependency.
 
 ## 6. What is not established
 
-- The provenance of the `8f78646d…` library — which build, from where,
-  installed when. Not claimed here, and no earlier conversation record in
-  this repository documents it.
+- The provenance of the active `8f78646d…` library — which build, from
+  where, installed when. Not claimed here, and no earlier conversation
+  record in this repository documents it. The operator reports that the
+  same hash is present under `/opt/inst/cc2-reactor/` and
+  `/opt/usr/cc2-reactor-before-firmware-4353/`, and that a `.so.bak` next
+  to the latter has the hash `4639364c…`. That `.bak` hash equals a
+  locally built file on the analysis machine
+  (`~/reactor-analysis/libcc2-reactor-v2.so`), so the `.bak` probably
+  came from that machine; this is a hash match on an operator-reported
+  value, not a traced copy.
 - Byte-level proof that nothing was ever written to the wrong addresses
   before the fingerprint check (if any) rejected the patch — inferred
   from process stability and the missing marker, not from a memory diff.
 
 ## 7. Fix verified
 
-The `fallback()` bug from §4 is now fixed, both in this repository and
-directly on the affected device:
+The `fallback()` bug from §4 is fixed directly on the affected device.
+The matching repository change was made and then taken back; see
+"Launcher fix and repository pin chain" below.
 
-- **Repository fix:** `builder/current/components/reactor/firmware-launcher.sh`
-  now exports `LD_LIBRARY_PATH=/opt/lib` in `fallback()` before the final
-  `exec`, matching the normal/success path. The corresponding pinned
-  `FIRMWARE_LAUNCHER_SHA256` in `builder/current/core/reactor_component.py`
-  was updated to match (no other pin changed). Committed and pushed as
-  **`c0f9fc0b`**.
 - **Device fix:** the exact same one-line change was applied directly to
   `/etc/init.d/cc2-reactor-launch` on the device, after backing up the
   original file locally first.
@@ -201,7 +203,62 @@ directly on the affected device:
 no longer depends on whether its caller sourced `/etc/profile`. The
 normal boot path already worked before the fix (see the correction in
 §4); what the fix changes is that a manual or scripted start outside a
-profile-sourced shell now works too. The incident is resolved.
+profile-sourced shell now works too. The incident is resolved on the
+device.
+
+### Launcher fix and repository pin chain
+
+The launcher fix was applied directly on the device and remains
+effective there, independent of the repository state.
+
+Commit `c0f9fc0b` on this fork branch made the same one-line change in
+`builder/current/components/reactor/firmware-launcher.sh` and updated
+`FIRMWARE_LAUNCHER_SHA256` in `builder/current/core/reactor_component.py`.
+It did not update the pins that depend on those two files:
+
+- `REACTOR_HELPER_SHA256` in `firmware_builder.py` no longer matched
+  `reactor_component.py`.
+- `connections_component.py` still pinned the installed
+  `etc/init.d/cc2-reactor-launch` to the previous hash `8d4a19c9…`.
+
+A real build from the branch would therefore have been refused. The host
+test suite does not cover this chain, which is why it still passed.
+
+The code part of `c0f9fc0b` has been reverted on this branch to restore
+the pinned verification chain: both files are back at their previous
+hashes (`8d4a19c9…` and `d9af4d96…`), and the changelog entry was
+removed. No pin was changed.
+
+Where this is tracked (all three entries were opened by the author of
+this fork; contents checked on 2026-11-09):
+
+- **Fork PR #1**
+  (<https://github.com/lpgamerzockt-ops/centauri-carbon-2-community/pull/1>,
+  "Document experimental reactor 02.01.01.13 address mapping") has this
+  branch, `docs/reactor-0113-address-mapping`, as its head. Commit
+  `c0f9fc0b` and its revert are therefore part of that pull request, and
+  the reactor launcher belongs to its subject. It is the entry that
+  tracks the launcher fix. Its description does not mention the fix yet.
+- **Upstream issue #334**
+  (<https://github.com/Neme77/centauri-carbon-2-community/issues/334>)
+  is the hand-off for the port of the community patches (printer, GUI,
+  camera) to 02.01.01.13. It is the umbrella for the 0113 work but does
+  not describe the reactor launcher.
+- **Upstream #336**
+  (<https://github.com/Neme77/centauri-carbon-2-community/pull/336>) is a
+  draft pull request, not an issue: tooling and documentation for that
+  patch port (`experimental/firmware-port-0113/`), from the branch
+  `update-2.03.03.13` that fork PR #1 is stacked on. It does not contain
+  the launcher or this branch's commits.
+
+The launcher fix is not applied in the repository. Applying it properly
+means updating, in one reviewed change: the launcher, `FIRMWARE_LAUNCHER_SHA256`,
+`REACTOR_HELPER_SHA256`, the Connections launcher pin,
+the `INTEGRATION_HELPERS` pin of `connections_component.py`, and
+`BUILDER_SHA256` in `launch_helpers/run_build.py`. Whether the Connections
+runtime needs requalification because its launcher baseline changes has
+not been checked. Whether the fix is carried in fork PR #1, added to
+#336, or proposed upstream separately is the fork author's decision.
 
 ## Affected device paths
 
@@ -218,7 +275,7 @@ profile-sourced shell now works too. The incident is resolved.
 
 Documents a real incident on real hardware. The address-generation
 mismatch (§1–§3) and the `fallback()` bug (§4) are both confirmed by
-direct evidence, and the `fallback()` bug is now fixed and verified by a
+direct evidence, and the `fallback()` bug is fixed on the device and verified by a
 real test (§7) — this incident is **resolved**, not merely worked
 around. This does not change the "experimental, unqualified" status of
 the 0113 port, does not update `VENDOR_SHA256`, and does not authorize

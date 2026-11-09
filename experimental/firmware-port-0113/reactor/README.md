@@ -107,9 +107,11 @@ to derive them. It does **not** contain:
   anything (fingerprint check held, fail-closed), and documents a
   `fallback()` bug (missing `LD_LIBRARY_PATH`) that broke printer startup
   whenever the launcher ran outside a shell that had sourced
-  `/etc/profile` (the normal boot path was not affected) — fixed in both
-  this repository (`c0f9fc0b`) and directly on the device, and verified by
-  a real start/stop test through the actual `fallback()` path.
+  `/etc/profile` (the normal boot path was not affected) — fixed directly on
+  the device and verified by a real start/stop test through the actual
+  `fallback()` path. The matching repository change (`c0f9fc0b`) broke
+  dependent hash pins and was reverted; both commits are part of fork PR #1
+  (see the incident record for how #334 and #336 relate).
 
 ## Open items before any further step
 

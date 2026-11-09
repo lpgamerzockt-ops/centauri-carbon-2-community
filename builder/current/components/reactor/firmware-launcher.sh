@@ -12,7 +12,6 @@ EXPECTED=19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745
 fallback() {
     logger -t cc2-reactor 'Experimental callback disabled or unavailable; starting vendor binary'
     [ "$PREPARE_ONLY" -eq 0 ] || exit 0
-    export LD_LIBRARY_PATH=/opt/lib
     exec /opt/bin/elegoo_printer "$@"
 }
 WAITED=0

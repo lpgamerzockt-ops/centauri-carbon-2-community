@@ -9,7 +9,7 @@ import struct
 FILES=('libcc2-reactor-v2.so','cc2-reactor-bridge-test','launcher.sh','preflight.sh','SHA256SUMS')
 VENDOR_SHA256='19712b5943b10bb8cb6aab9a4ed498ee962b28538b23c91b7ed003eb9e590745'
 LIBCO_SHA256='14288a4a73c339b039dd89597618ebb05702f90d668b76f74019d5d15ce67403'
-FIRMWARE_LAUNCHER_SHA256='67d6013911d285f262c251a93bea7985e0cc008f832753ce09e421b416fffe3c'
+FIRMWARE_LAUNCHER_SHA256='8d4a19c9be1f6f85fe5ab9d3f116aa84400e7e6a77c455e66da636373fdaac43'
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()

@@ -21,13 +21,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- Reactor firmware launcher: export `LD_LIBRARY_PATH` before falling back to
-  the unmodified vendor `elegoo_printer` (the hash/payload-check path already
-  exported it; the fallback path relied on the caller's environment, so with
-  a disabled or failed reactor callback a start from a shell that had not
-  sourced `/etc/profile` left `elegoo_printer` unable to find `libcolib.so`;
-  the normal boot path was not affected). Found during 0113
-  hardware-readiness testing.
 - Start preparing the qualified USB Ethernet link before the camera starts, and give the camera a bounded wait for carrier on Ethernet-enabled boots. Reported by **kalross** (#322).
 - Prepare USB Ethernet activation when the minimum EXHAUST feature is active. A full idle reboot loads both components, after which the normal Connections confirmation applies. Reported by **kalross** and reproduced by **Neme77** (#323).
 

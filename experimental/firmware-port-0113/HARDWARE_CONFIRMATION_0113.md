@@ -49,6 +49,21 @@ as required in `base_profiles/02.01.01.13.json`'s `ported_patch_set`
 comment (Z-offset/GUI, HTTP/network — combined into `elegoo_printer` —
 and camera), plus the separately-tracked Dual Trust patch to `daemon-000`.
 
+## Relation to the open tracking entries
+
+- Upstream issue #334
+  (<https://github.com/Neme77/centauri-carbon-2-community/issues/334>)
+  lists the same GUI (`668ab8cb…`) and camera (`90da7634…`) output
+  hashes as found on the device. Its printer hash (`adb85293…`) is an
+  earlier build; the draft pull request #336
+  (<https://github.com/Neme77/centauri-carbon-2-community/pull/336>)
+  states that this earlier build had a payload defect that its tooling
+  fixes. The device runs `688b7bf8…`, the output recorded in
+  `WORK/corrected_v2/report.json`.
+- Both entries describe the port as static- and emulation-verified and
+  not hardware-tested. This document adds hash evidence from one device;
+  it does not change that status.
+
 ## Runtime evidence, precisely stated
 
 Two uptime measurements exist from the same session, separated by a full
@@ -103,6 +118,11 @@ Details of the later measurement:
   being pinned as identical to 02.01.01.07 in the base profile.
 
 **Does not establish:**
+- That a 02.01.01.13 Community build is complete. The build path also
+  needs the native display, the Connections component (vendor file pins
+  and kernel modules), the camera runtime and the CC2 Control
+  compatibility list, none of which is covered by these four hashes; see
+  `PIPELINE_MULTI_BASE_DESIGN.md` section 2.
 - A formal, documented emulation test for GUI or camera (per
   `WORK/corrected_v2/report.json`'s own words: "Emulation + Hardware
   weiterhin noetig" was still true as of that report; this document is
