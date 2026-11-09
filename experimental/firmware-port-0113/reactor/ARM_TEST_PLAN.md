@@ -261,6 +261,12 @@ run either. The rollback prerequisite in section 3 is now met for
 `elegoo_printer` (see above); H1–H3 install nothing, so they are no
 longer blocked by it.
 
+- H1 (Z-offset menu during a print): **PASS** on 2026-11-10; details and
+  the limits of the evidence in [`../TEST_MATRIX.md`](../TEST_MATRIX.md),
+  section "Ergebnisse auf echter Hardware". This is a test of the GUI
+  patch, not of the reactor; section 5 stays NOT RUN.
+- H2, H3: NOT RUN.
+
 ## 7. Abort and rollback
 
 - **Abort immediately** on: any crash/core dump, any `SIGSEGV`/`pc=0`

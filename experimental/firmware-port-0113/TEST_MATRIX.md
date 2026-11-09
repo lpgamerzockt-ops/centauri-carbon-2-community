@@ -53,6 +53,47 @@ Grundlagen:
 | H6 | Gerätestatus-Meldungen | `device_status_offset` | korrekte Status/Substatus | Statusanzeige/Logs | PASS wenn plausibel | falscher Status |
 | H7 | Boot, Rollback, Power-Cycle | uboot/boot0 + Gesamtpaket | sauberer Boot, Rollback möglich | Power-Cycle, Update/Downgrade | PASS wenn kein Brick | — (Abbruch, nicht flashen) |
 
+### Ergebnisse auf echter Hardware
+
+Ein Testgerät, 02.01.01.13 mit den Ständen aus `HARDWARE_CONFIRMATION_0113.md`
+(`elegoo_printer` `688b7bf8…`, GUI `668ab8cb…`, Kamera `90da7634…`), Reactor
+deaktiviert, kein `LD_PRELOAD`. Gerätezeit (CST).
+
+| # | Datum | Ergebnis | Durchführung und Beobachtung | Belege |
+|---|---|---|---|---|
+| H1 | 2026-11-10 | **PASS** | Datei `ECC2_0.6_first layer_Elegoo PLA+ _0.3_4m57s.gcode` (eine Schicht 0,3 mm, 80 × 80 mm, PLA+, 0,6-mm-Düse), Start ca. 05:54. Während des Drucks ließ sich das Z-Offset-Menü öffnen und bedienen; der Wert wurde mehrfach zwischen +0,05 und −0,05 mm verstellt, die Z-Achse reagierte hörbar. Druck regulär beendet. | Bediener-Beobachtung für Menü und Achse. `elegoo_printer` PID 2658 vor (05:52, 05:54) und nach dem Druck (06:08) gleich, Uptime durchgehend gestiegen: kein Absturz, kein Neustart. `GET :8081/api/printer` danach: `print.state = complete`, `z_offset.value = 0.035`. |
+
+Zu H1 nicht belegt:
+- **Einzelne Offset-Werte während des Drucks:** nicht protokolliert. Das Log
+  des Druckerprozesses ging nach `/dev/null` (`/proc/2658/fd/1` und `fd/2`),
+  weil der Prozess zuvor mit `run_printer.sh start >/dev/null 2>&1` neu
+  gestartet worden war.
+- **Ausgangswert vor dem Test:** nicht notiert; nach dem Test steht der Offset
+  auf `0.035`.
+- **Wirkung im Druckbild:** Nach dem Entnehmen der Fläche berichtet der
+  Bediener eine erkennbar unterschiedliche Haftung der Schicht in den
+  Bereichen, in denen der Offset verstellt war. Das ist eine Sicht- und
+  Tastprüfung ohne Messung, und welche Stelle zu welchem Wert gehört, ist
+  nicht zugeordnet.
+
+Nachtest im Leerlauf, nach dem Druck (Druckstatus `complete`, kein Teil
+von H1): Änderungen am Display erschienen innerhalb des 2-s-Abfrageintervalls
+in `GET :8081/api/printer`, ohne `pending` oder `timed_out`. Die Werte liefen
+von `0.035` über `-0.015`, `-0.04`, `-0.015` und `0.005` nach `-0.015`. Damit
+ist belegt, dass die Firmware Änderungen aus dem Menü übernimmt und der Wert
+live auslesbar ist; während eines Drucks wurde das nicht mitgeschrieben.
+
+Nebenbefund: CC2 Control meldete zur Druckzeit `code 1301`, `level 3`,
+„ai spaghetti detection error". Das Druckergebnis war davon nicht betroffen;
+die Ursache ist ungeklärt und gehört zur Kamera-Prüfung (H2).
+
+Für weitere Tests:
+- **Log erhalten:** Neustarts so ausführen, dass das Log erhalten bleibt,
+  zum Beispiel `run_printer.sh start > /opt/usr/elegoo-test.log 2>&1`.
+- **Live-Werte:** Z-Offset und Druckstatus lassen sich ohne SSH über
+  `GET http://<Drucker>:8081/api/printer` (Felder `z_offset`, `print.state`)
+  mitschreiben.
+
 ## Reihenfolge
 
 1. E1, E2, E6 (lageunabhängig/einfach) — sofort emulierbar.
