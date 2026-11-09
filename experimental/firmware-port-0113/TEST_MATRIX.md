@@ -27,6 +27,24 @@ Grundlagen:
 
 ## A. Emulations-Matrix
 
+### Ausgeführt am 2026-11-10 (lokal, Unicorn 2.1.4)
+
+Gegen den `corrected_v2`-Stand (die Bytes, die auf dem Testgerät laufen):
+`elegoo_printer` `688b7bf8…`, `ec-eeb001-gui` `668ab8cb…`, `ai_camera`
+`90da7634…`. Vendor-Funktionen sind dabei abgefangen; die Tests prüfen
+Kontrollfluss, nicht Hardware.
+
+| Script | Deckt ab | Ergebnis |
+|---|---|---|
+| `emulate_e1.py` | E1 | **PASS** — PC erreicht `0x74bd0`, `data_get_print_status` (`0xae640`) nicht aufgerufen |
+| `emulate_e2.py` | E2 | **PASS** — erster Aufruf landet bei `resume` (`0x16a7f8`), nicht `pause` (`0x16a748`) |
+| `emulate_e345.py` | E3/E4/E5 | **PASS** — 128/128 (32 Status × 4 Pfade) |
+| `emulate_e6.py` | E6 | **PASS** — `stop_http_server_file` (`0x827148`) nicht aufgerufen, Funktion läuft bis Rücksprung |
+
+Weiterhin nicht ausgeführt: E7, E8, E9, E10 (payload-/disassembly-abhängig,
+in der Matrix unten als blockiert/offen markiert), E11 (Dual Trust /
+Reactor byte-identisch, keine Emulation nötig).
+
 | # | Ziel | Betroffene Stelle | Kat. | Erwartetes Verhalten | Beobachtung | Pass/Fail | Rückfall bei Fail |
 |---|---|---|---|---|---|---|---|
 | E1 | GUI Z-Offset im Druck erreichbar | `set_event_cb` case5 @ `0x747c8` → `0x74bd0` | L | Sprung in den Z-Offset-Pfad unabhängig vom Druckstatus | PC landet bei `0x74bd0` (→ `setting_set_z_offset_create`) | PASS wenn Ziel erreicht, in jedem Status | Menü bleibt statusabhängig gesperrt |
