@@ -69,6 +69,11 @@ to derive them. It does **not** contain:
   a struct-offset cross-check against the already-verified vendor code,
   a vtable applicability check, and an isolated ARM32 (emulated)
   self-test of the bridge's own logic with the vendor mocked out.
+- [`ABI_VENDOR_INTERFACE_VERIFICATION_0113.md`](ABI_VENDOR_INTERFACE_VERIFICATION_0113.md) —
+  assumption/method/result/evidence for the remaining open struct
+  offsets, function signatures, calling convention, and the
+  exception/unwind boundary against the actual vendor binaries; unclear
+  items are marked BLOCKER, not assumed compatible.
 - [`ARM_TEST_PLAN.md`](ARM_TEST_PLAN.md) — acceptance criteria and abort
   conditions for the still-outstanding hardware/ABI steps.
 
