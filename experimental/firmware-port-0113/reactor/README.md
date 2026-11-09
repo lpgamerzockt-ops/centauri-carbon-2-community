@@ -88,6 +88,15 @@ to derive them. It does **not** contain:
   offsets now confirmed), and strengthens the exception/unwind-boundary
   gate with a function-specific personality-routine check for
   `SelectReactor::pause`.
+- [`ABI_FINAL_CLOSURE_2_0113.md`](ABI_FINAL_CLOSURE_2_0113.md) — closes
+  the calling-convention gate for the function `cc2_wait` patches
+  (hidden-result-pointer register layout confirmed by direct
+  disassembly), and closes the `.ARM.extab` LSDA byte-level comparison
+  for `SelectReactor::pause` (byte-identical except the one word fully
+  explained by the already-confirmed personality-routine-address shift).
+  The only remaining open ABI items are inherently runtime (a live
+  exception through a real vendor frame) or require a reference artifact
+  this repository does not have (the originally-intended toolchain).
 - [`ARM_TEST_PLAN.md`](ARM_TEST_PLAN.md) — acceptance criteria and abort
   conditions for the still-outstanding hardware/ABI steps.
 
