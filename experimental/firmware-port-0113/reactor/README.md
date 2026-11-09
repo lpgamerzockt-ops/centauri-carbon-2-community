@@ -83,6 +83,11 @@ to derive them. It does **not** contain:
   disassembly; offsets `20`/`248` upgraded to "indirectly well-supported
   via stable libstdc++ ABI," explicitly not claimed as directly
   confirmed.
+- [`ABI_FINAL_CLOSURE_0113.md`](ABI_FINAL_CLOSURE_0113.md) — closes
+  offsets `20`/`248` with direct disassembly evidence (all 11 struct
+  offsets now confirmed), and strengthens the exception/unwind-boundary
+  gate with a function-specific personality-routine check for
+  `SelectReactor::pause`.
 - [`ARM_TEST_PLAN.md`](ARM_TEST_PLAN.md) — acceptance criteria and abort
   conditions for the still-outstanding hardware/ABI steps.
 
