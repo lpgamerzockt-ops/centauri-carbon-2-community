@@ -53,20 +53,44 @@ library's hardcoded patch table targets the 07-era function layout, in a
 process running the 0113-era `elegoo_printer` (addresses shifted by
 `+0x2530` throughout this port, see `ADDRESS_MAPPING_0113.md`).
 
-## 3. Why this did not visibly corrupt anything: the fingerprint check held
+## 3. Why this did not visibly corrupt anything: the reactor was never activated
 
-`/opt/usr/cc2-reactor-runtime-v2/activation.marker` did **not** exist when
-checked. `reactor_module.cpp`'s own `cc2_activate()` only writes that
-marker after every one of its four `patch()` calls succeeds (each
-`patch()` call first checks an 8-byte fingerprint at the target address
-and refuses to patch on a mismatch). The absence of the marker, together
-with the running `elegoo_printer` process being stable (same PID across
-multiple checks, no new entries in `dmesg`), is consistent with the
-fingerprint check rejecting the patch at the wrong (07-era) addresses and
-failing closed, as designed. This is the most likely explanation
-supported by the available evidence; it is not a formal proof that no
-single byte was ever written anywhere (that would require a full memory
-diff, which was not performed).
+**Correction (2026-11-09).** An earlier version of this section said the
+fingerprint check had rejected the patch. Reading the constructor of the
+source the library was built from shows that the check never ran.
+
+`activate()` in `reactor_module.cpp` is a library constructor. Read from
+the exact source the deployed library was built from (see §6a):
+
+```cpp
+const char *enabled=getenv("CC2_REACTOR_RUNTIME_V2");if(!enabled||std::strcmp(enabled,"1"))return;
+... if(std::strcmp(path,"/opt/usr/cc2-reactor-runtime-v2/elegoo_printer"))fail("unsupported executable path");
+for(const auto &f:fingerprints)if(std::memcmp(...))fail("original instruction fingerprint");
+patch(0x26d08c,...); ... // four patches, then activation.marker
+```
+
+and `fail()` is `dprintf(2,"CC2 REACTOR V2 STOP: %s\n",reason);_exit(125);`.
+
+- The on-device launcher sets `LD_LIBRARY_PATH` and `LD_PRELOAD` only; it
+  never exports `CC2_REACTOR_RUNTIME_V2=1` (backup of
+  `/etc/init.d/cc2-reactor-launch`, and the runtime's own `launcher.sh`).
+  So `activate()` returned at its first line: the library was loaded into
+  the process, but nothing was checked or patched, and no marker was
+  written.
+- Had the variable been set, the process would not have patched wrong
+  addresses either: it runs from `/opt/bin/elegoo_printer`, so the
+  executable-path check would have called `fail()`, and failing that, the
+  fingerprint table (still holding the 07-era addresses, §6a) would have.
+  `fail()` ends the whole process with exit code 125. That the process
+  kept running with the same PID is therefore consistent only with the
+  early return, not with a rejected check.
+- Consequence: no vendor code was modified in memory. This is a reading of
+  the source plus the observed environment and process behaviour, not a
+  memory diff.
+
+The earlier wording ("fingerprint check held", "appears to have refused
+to apply the patch") also appears in the description of fork PR #1 and
+is corrected there separately.
 
 ## 4. The `fallback()` bug: confirmed; fixed on the device, open in the repository
 
@@ -157,19 +181,65 @@ outside a profile-sourced shell. The fix in §7 removes that dependency.
 
 ## 6. What is not established
 
-- The provenance of the active `8f78646d…` library — which build, from
-  where, installed when. Not claimed here, and no earlier conversation
-  record in this repository documents it. The operator reports that the
-  same hash is present under `/opt/inst/cc2-reactor/` and
-  `/opt/usr/cc2-reactor-before-firmware-4353/`, and that a `.so.bak` next
-  to the latter has the hash `4639364c…`. That `.bak` hash equals a
-  locally built file on the analysis machine
-  (`~/reactor-analysis/libcc2-reactor-v2.so`), so the `.bak` probably
-  came from that machine; this is a hash match on an operator-reported
-  value, not a traced copy.
-- Byte-level proof that nothing was ever written to the wrong addresses
-  before the fingerprint check (if any) rejected the patch — inferred
-  from process stability and the missing marker, not from a memory diff.
+- When and by which exact commands the library was copied to the
+  device: not recorded in any transcript available here (see §6b).
+- A memory diff proving no vendor byte changed: not performed; see §3 for
+  why the source makes a patch impossible in this configuration.
+
+## 6a. Provenance of the active library (resolved)
+
+The active `8f78646d…` library was built on the analysis machine on
+2026-11-09 at 01:52 (machine time) in a separate working copy,
+`~/reactor-analysis/centauri-carbon-2-community`, branch
+`reactor-2.01.01.13` on base `df8a47b1`, as
+`builder/current/components/reactor/prepared/libcc2-reactor-v2.so`.
+
+- Its `prepared-manifest.json` records `vendor_sha256` `688b7bf8…`, GCC
+  6.5.0 / glibc 2.23 / O0, and the hashes of the four sources it was built
+  from. All four equal the files currently in that working copy.
+- In that source, `reactor_module.cpp` already uses the 0113 patch
+  addresses (`patch(0x26d08c,…)` …), but `fingerprints.h` was not changed:
+  it still lists `0x26ab5c`, `0x26ccac`, `0x26e3a8`, `0x26a640`. These are
+  the four 07-era addresses found in the library (§2), at 12-byte spacing,
+  which is one table entry (4-byte address + 8 bytes) each.
+- So the mismatch comes from an incomplete port in that working copy:
+  half of the address table was moved, the fingerprint table was not.
+  The branch documented in this directory updates both (commit
+  `659906c0`).
+- The `.so.bak` hash `4639364c…` (operator-reported) equals
+  `~/reactor-analysis/libcc2-reactor-v2.so`, another local build.
+- The device's `cc2-reactor-bridge-test` (`de95ca2e…`) and `launcher.sh`
+  (`f7e300fa…`) differ from that build's outputs (`792ead1f…`,
+  `f9e9cc2d…`); see §6b.
+
+The working copy's uncommitted changes (six files) were saved as a patch
+outside the repository, together with its build manifest; the working
+copy itself was left unchanged.
+
+## 6b. Changes made on the device outside this repository (reported)
+
+A separate session of the same operator recorded a status summary of
+manual steps on the device. No command transcript of those steps is
+available, so the list below is reported, not verified:
+
+- Built the library above and copied it, with its runtime files, to
+  `/opt/inst/cc2-reactor/` and the runtime directory.
+- Changed `EXPECTED` in `/etc/init.d/cc2-reactor-launch` to `688b7bf8…`
+  and regenerated `SHA256SUMS` in the source and runtime directories.
+- Edited `launcher.sh` and a `reactor-entry.sh` several times to break a
+  start loop, finally to start the vendor binary directly. The runtime's
+  `launcher.sh` on the device now only sets `LD_LIBRARY_PATH` and runs
+  `/opt/bin/elegoo_printer` (backup hash `f7e300fa…`), unlike the
+  repository version.
+- Rewrote the end of `/etc/init.d/cc2-reactor-launch` to set `LD_PRELOAD`
+  and start `/opt/bin/elegoo_printer` directly instead of `launcher.sh`.
+- Took the vendor log lines `TimerManager`, registered callbacks and
+  `Lookahead callback triggered` as signs that the reactor worked. They
+  are normal vendor output; by §3 the reactor was not active.
+
+These edits explain why the device's launcher chain differs from
+`builder/current/components/reactor/firmware-launcher.sh`, and why
+`CC2_REACTOR_RUNTIME_V2` was never set.
 
 ## 7. Fix verified
 
@@ -280,5 +350,6 @@ real test (§7) — this incident is **resolved**, not merely worked
 around. This does not change the "experimental, unqualified" status of
 the 0113 port, does not update `VENDOR_SHA256`, and does not authorize
 re-enabling the reactor hook or any further hardware action. The
-provenance of the mismatched `8f78646d…` library (§6) remains
-unestablished and is a separate open question from the `fallback()` bug.
+mismatched `8f78646d…` library came from an incomplete port in a separate
+local working copy (§6a); how it was copied to the device is reported,
+not recorded (§6b).

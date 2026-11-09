@@ -104,7 +104,7 @@ to derive them. It does **not** contain:
   address-generation-mismatched `libcc2-reactor-v2.so` was found active via
   `LD_PRELOAD` on a real 0113 device. Confirms (not hypothesizes) the
   mismatch by direct byte search, explains why it did not visibly corrupt
-  anything (fingerprint check held, fail-closed), and documents a
+  anything (the reactor was loaded but never activated), and documents a
   `fallback()` bug (missing `LD_LIBRARY_PATH`) that broke printer startup
   whenever the launcher ran outside a shell that had sourced
   `/etc/profile` (the normal boot path was not affected) — fixed directly on
