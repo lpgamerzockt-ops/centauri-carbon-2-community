@@ -65,6 +65,10 @@ to derive them. It does **not** contain:
 - [`SUPPORT_FUNCTIONS_DIFF_0113.md`](SUPPORT_FUNCTIONS_DIFF_0113.md) — the
   same comparison extended to the other 18 vendor addresses the bridge
   calls into (not just the 4 patch targets).
+- [`ABI_AND_RUNTIME_VERIFICATION_0113.md`](ABI_AND_RUNTIME_VERIFICATION_0113.md) —
+  a struct-offset cross-check against the already-verified vendor code,
+  a vtable applicability check, and an isolated ARM32 (emulated)
+  self-test of the bridge's own logic with the vendor mocked out.
 - [`ARM_TEST_PLAN.md`](ARM_TEST_PLAN.md) — acceptance criteria and abort
   conditions for the still-outstanding hardware/ABI steps.
 
