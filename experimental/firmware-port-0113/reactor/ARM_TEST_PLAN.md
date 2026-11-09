@@ -115,16 +115,18 @@ met and recorded under "Result log" — never from artifact identity alone.
     `fallback()` in both the on-device `/etc/init.d/cc2-reactor-launch` and
     this repository's own `firmware-launcher.sh` exec'd `elegoo_printer`
     without exporting `LD_LIBRARY_PATH=/opt/lib` first, unlike the normal
-    path — any device reaching `fallback()` (e.g. via
-    `/opt/usr/cc2-reactor-disabled`, or a hash-check failure) failed to
-    start `elegoo_printer` at all (`error while loading shared libraries:
-    libcolib.so: cannot open shared object file`). **Fixed** in this
-    repository (`c0f9fc0b`) and directly on the affected device; verified
-    by a real `run_printer.sh stop`/`start` cycle through the actual
-    `fallback()` path (new clean process instance, no `LD_PRELOAD`, no
-    error). A device is now safe to reboot while
-    `/opt/usr/cc2-reactor-disabled` is present, provided it has received
-    this same one-line fix.
+    path — a device reaching `fallback()` (e.g. via
+    `/opt/usr/cc2-reactor-disabled`, or a hash-check failure) from a shell
+    that had not sourced `/etc/profile` (such as a non-interactive SSH
+    command) failed to start `elegoo_printer` (`error while loading shared
+    libraries: libcolib.so: cannot open shared object file`). The normal
+    boot path was not affected, because `/etc/init.d/printer` sources
+    `/etc/profile`, which exports `LD_LIBRARY_PATH=/opt/lib`. **Fixed** in
+    this repository (`c0f9fc0b`) and directly on the affected device;
+    verified by a real `run_printer.sh stop`/`start` cycle over SSH through
+    the actual `fallback()` path (new clean process instance, no
+    `LD_PRELOAD`, no error). For any manual start/stop step in this plan,
+    use a device that has this fix, or source `/etc/profile` first.
 - [ ] Confirmed exactly one printer instance is used for this entire plan
   (no mixing results from more than one device or from a device that was
   reflashed mid-plan).

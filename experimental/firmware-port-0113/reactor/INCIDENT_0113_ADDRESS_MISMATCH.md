@@ -117,12 +117,30 @@ present in this repository's own committed
 [`builder/current/components/reactor/firmware-launcher.sh`](../../../builder/current/components/reactor/firmware-launcher.sh),
 whose `fallback()` had the same shape and the same missing export.
 
-**Consequence at that point, stated plainly: a real reboot of this
-device would have hit this same bug again and failed to start
-`elegoo_printer` at boot**, because the disable marker routes every boot
-through the broken `fallback()` path. This was not resolved by the
-manual workaround above — only worked around for that single process
-instance. The actual fix is in §7 below.
+**Correction (added after a follow-up check): the failure depends on the
+calling environment, and the normal boot path was not affected.** An
+earlier version of this document claimed a real reboot would have hit
+this bug and failed to start `elegoo_printer`. That claim was wrong:
+
+- `/etc/profile` line 31 on the device reads
+  `export LD_LIBRARY_PATH=/opt/lib:$LD_LIBRARY_PATH`.
+- `/etc/init.d/printer`'s `start()` runs `source /etc/profile` before it
+  calls `run_printer.sh start`, so at boot `fallback()` inherits
+  `LD_LIBRARY_PATH` from its parent even though it does not export it
+  itself.
+- The observed failure came from `run_printer.sh stop; run_printer.sh
+  start` issued as a non-interactive SSH command, an environment that
+  does not source `/etc/profile`.
+- Consistent with this: the device went through a full reboot during the
+  same session while the disable marker was present and before the
+  script was fixed, and `elegoo_printer` was running afterwards (seen as
+  PID 1998, no `LD_PRELOAD`). That it was started by the boot sequence
+  is inferred from the lower PID and the reset uptime, not separately
+  logged.
+
+So the defect is real but narrower: `fallback()` silently relied on its
+caller's environment, and failed whenever the launcher was started
+outside a profile-sourced shell. The fix in §7 removes that dependency.
 
 ## 5. Confirmed device state at that point (before the fix in §7)
 
@@ -132,8 +150,8 @@ instance. The actual fix is in §7 below.
   `688b7bf8a27762d56b35d9738ea5b0c3d45580b402e122b0f77ee49dab1a8cfd`
   (matches the hash `cc2-reactor-launch` itself pins as `EXPECTED`).
 - `/opt/usr/cc2-reactor-disabled` present → future boots take the
-  `fallback()` path (and would have failed there — see §4, before §7's
-  fix).
+  `fallback()` path (which worked at boot, but failed when started from
+  a shell without `/etc/profile` — see the correction in §4).
 - Reactor hook not activated at any point checked (no
   `activation.marker`).
 
@@ -178,10 +196,12 @@ directly on the affected device:
     no `LD_PRELOAD` line above it, confirming the running process is in
     plain vendor mode, as intended.
 
-**This closes the open risk from §4: a real reboot of this device would
-no longer hit the `libcolib.so` failure**, because the fixed
-`fallback()` now sets `LD_LIBRARY_PATH` exactly as the success path
-already did. The incident is resolved, not merely worked around.
+**This closes the defect from §4:** the fixed `fallback()` now sets
+`LD_LIBRARY_PATH` itself, exactly as the success path already did, so it
+no longer depends on whether its caller sourced `/etc/profile`. The
+normal boot path already worked before the fix (see the correction in
+§4); what the fix changes is that a manual or scripted start outside a
+profile-sourced shell now works too. The incident is resolved.
 
 ## Affected device paths
 

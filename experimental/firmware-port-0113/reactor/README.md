@@ -105,10 +105,11 @@ to derive them. It does **not** contain:
   `LD_PRELOAD` on a real 0113 device. Confirms (not hypothesizes) the
   mismatch by direct byte search, explains why it did not visibly corrupt
   anything (fingerprint check held, fail-closed), and documents a
-  `fallback()` bug (missing `LD_LIBRARY_PATH`) that would have broken
-  printer startup on a real reboot — fixed in both this repository
-  (`c0f9fc0b`) and directly on the device, and verified by a real start/stop
-  test through the actual `fallback()` path.
+  `fallback()` bug (missing `LD_LIBRARY_PATH`) that broke printer startup
+  whenever the launcher ran outside a shell that had sourced
+  `/etc/profile` (the normal boot path was not affected) — fixed in both
+  this repository (`c0f9fc0b`) and directly on the device, and verified by
+  a real start/stop test through the actual `fallback()` path.
 
 ## Open items before any further step
 
