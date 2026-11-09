@@ -152,11 +152,13 @@ directly against it.
 ## Open items carried forward
 
 1. ~~Full instruction-level body comparison~~ — done, see
-   [`INSTRUCTION_DIFF_0113.md`](INSTRUCTION_DIFF_0113.md): all four hook
-   functions are instruction-identical between the 07 and 0113 builds
-   after normalizing call-target/immediate addresses. That document also
-   corrects an earlier conflation of this with the existing manifest's
-   unrelated `instructions_equal_except_call_targets: false` field.
+   [`INSTRUCTION_DIFF_0113.md`](INSTRUCTION_DIFF_0113.md): every differing
+   instruction was individually resolved (no blanket normalization); all
+   four hook functions are instruction- and control-flow-identical between
+   the 07 and 0113 builds except one explained, behaviorally-inert
+   embedded `__FILE__` build-path string. That document also corrects an
+   earlier conflation of this with the existing manifest's unrelated
+   `instructions_equal_except_call_targets: false` field.
 2. Struct/ABI layout, calling-convention, and exception-boundary
    re-verification — none of this follows from matching entry bytes or
    from the full-body instruction match in `INSTRUCTION_DIFF_0113.md`.
