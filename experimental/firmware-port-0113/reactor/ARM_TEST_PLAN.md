@@ -110,17 +110,21 @@ met and recorded under "Result log" — never from artifact identity alone.
   - This closes the "command not yet verified against existing launcher"
     gate for *start*; it does not invent or verify a *stop* command, since
     none exists in the sources checked.
-  - **Known open defect, confirmed on real hardware (see
+  - **Defect found and fixed on real hardware (see
     [`INCIDENT_0113_ADDRESS_MISMATCH.md`](INCIDENT_0113_ADDRESS_MISMATCH.md)):**
     `fallback()` in both the on-device `/etc/init.d/cc2-reactor-launch` and
-    this repository's own `firmware-launcher.sh` execs `elegoo_printer`
+    this repository's own `firmware-launcher.sh` exec'd `elegoo_printer`
     without exporting `LD_LIBRARY_PATH=/opt/lib` first, unlike the normal
-    path. Any device that reaches `fallback()` (e.g. via
-    `/opt/usr/cc2-reactor-disabled`, or a hash-check failure) fails to
+    path — any device reaching `fallback()` (e.g. via
+    `/opt/usr/cc2-reactor-disabled`, or a hash-check failure) failed to
     start `elegoo_printer` at all (`error while loading shared libraries:
-    libcolib.so: cannot open shared object file`). **Fix this in
-    `firmware-launcher.sh` before relying on the disable marker across a
-    reboot on any device.**
+    libcolib.so: cannot open shared object file`). **Fixed** in this
+    repository (`c0f9fc0b`) and directly on the affected device; verified
+    by a real `run_printer.sh stop`/`start` cycle through the actual
+    `fallback()` path (new clean process instance, no `LD_PRELOAD`, no
+    error). A device is now safe to reboot while
+    `/opt/usr/cc2-reactor-disabled` is present, provided it has received
+    this same one-line fix.
 - [ ] Confirmed exactly one printer instance is used for this entire plan
   (no mixing results from more than one device or from a device that was
   reflashed mid-plan).

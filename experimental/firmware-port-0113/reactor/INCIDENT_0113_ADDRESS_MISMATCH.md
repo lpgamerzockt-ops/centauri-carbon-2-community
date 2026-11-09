@@ -68,7 +68,7 @@ supported by the available evidence; it is not a formal proof that no
 single byte was ever written anywhere (that would require a full memory
 diff, which was not performed).
 
-## 4. The `fallback()` bug: confirmed, and still unfixed on disk
+## 4. The `fallback()` bug: confirmed, and now fixed
 
 The real, on-device start chain (read directly, not assumed from the
 repository's committed copy, which turned out to match it) is:
@@ -108,21 +108,23 @@ bypassing the whole launcher chain:
 LD_LIBRARY_PATH=/opt/lib /opt/bin/elegoo_printer /opt/inst/printer_dsp.cfg -s /opt/usr/cfg/autosave.cfg -a /tmp/elegoo_uds &
 ```
 
-**`/etc/init.d/cc2-reactor-launch` itself was not edited.** Re-read after
-the incident, its `md5sum` is `9e15e1116264c2438b388f7052db57ac` and its
-`fallback()` body is byte-for-byte the same as quoted above — still
-missing the `LD_LIBRARY_PATH` export. This is an identical bug to the one
-already present in this repository's own committed
+At the time this was first found, `/etc/init.d/cc2-reactor-launch` itself
+had **not** been edited: re-read right after the incident, its `md5sum`
+was `9e15e1116264c2438b388f7052db57ac` and its `fallback()` body was
+byte-for-byte the same as quoted above — still missing the
+`LD_LIBRARY_PATH` export. This was an identical bug to the one already
+present in this repository's own committed
 [`builder/current/components/reactor/firmware-launcher.sh`](../../../builder/current/components/reactor/firmware-launcher.sh),
-whose `fallback()` has the same shape and the same missing export.
+whose `fallback()` had the same shape and the same missing export.
 
-**Consequence, stated plainly: a real reboot of this device right now
-would hit this same bug again and fail to start `elegoo_printer` at
-boot**, because the disable marker routes every boot through the broken
-`fallback()` path. This is not resolved by anything done so far — only
-worked around for the single current (still-running) process instance.
+**Consequence at that point, stated plainly: a real reboot of this
+device would have hit this same bug again and failed to start
+`elegoo_printer` at boot**, because the disable marker routes every boot
+through the broken `fallback()` path. This was not resolved by the
+manual workaround above — only worked around for that single process
+instance. The actual fix is in §7 below.
 
-## 5. Confirmed current device state (as of this incident)
+## 5. Confirmed device state at that point (before the fix in §7)
 
 - `elegoo_printer` running, single instance, no `LD_PRELOAD` in its
   environment (`cat /proc/<pid>/environ | grep -i preload` empty).
@@ -130,7 +132,8 @@ worked around for the single current (still-running) process instance.
   `688b7bf8a27762d56b35d9738ea5b0c3d45580b402e122b0f77ee49dab1a8cfd`
   (matches the hash `cc2-reactor-launch` itself pins as `EXPECTED`).
 - `/opt/usr/cc2-reactor-disabled` present → future boots take the
-  `fallback()` path (and will currently fail there — see §4).
+  `fallback()` path (and would have failed there — see §4, before §7's
+  fix).
 - Reactor hook not activated at any point checked (no
   `activation.marker`).
 
@@ -142,10 +145,43 @@ worked around for the single current (still-running) process instance.
 - Byte-level proof that nothing was ever written to the wrong addresses
   before the fingerprint check (if any) rejected the patch — inferred
   from process stability and the missing marker, not from a memory diff.
-- A fix for the `fallback()` `LD_LIBRARY_PATH` bug — not applied here,
-  neither on the device nor in this repository's own copy of the same
-  bug in `firmware-launcher.sh`. Left as a known, open, reproducible
-  defect.
+
+## 7. Fix verified
+
+The `fallback()` bug from §4 is now fixed, both in this repository and
+directly on the affected device:
+
+- **Repository fix:** `builder/current/components/reactor/firmware-launcher.sh`
+  now exports `LD_LIBRARY_PATH=/opt/lib` in `fallback()` before the final
+  `exec`, matching the normal/success path. The corresponding pinned
+  `FIRMWARE_LAUNCHER_SHA256` in `builder/current/core/reactor_component.py`
+  was updated to match (no other pin changed). Committed and pushed as
+  **`c0f9fc0b`**.
+- **Device fix:** the exact same one-line change was applied directly to
+  `/etc/init.d/cc2-reactor-launch` on the device, after backing up the
+  original file locally first.
+- **Test performed:** a real `run_printer.sh stop; run_printer.sh start`
+  cycle — the same real start chain that previously failed — with
+  `/opt/usr/cc2-reactor-disabled` still present, so the device went
+  through the real, on-device `fallback()` path, not a simulation.
+- **Result:**
+  - `elegoo_printer` came up as a new, clean process instance, **PID
+    2411**.
+  - No `libcolib.so` error occurred anywhere in the startup log.
+  - The full, normal vendor startup sequence completed through the real
+    `fallback()` path: MCU/toolhead/bed-sensor configuration, bed mesh,
+    input shaper, HTTP server on port 80, MQTT connection, Canvas
+    firmware detection, filament sensor, device state reaching `IDLE`.
+  - Confirmed afterward: `ps w | grep elegoo_printer` showed exactly one
+    instance (PID 2411); `cat /proc/2411/environ | grep -i preload`
+    returned nothing — `DONE_NO_PRELOAD_MEANS_EMPTY_ABOVE` printed with
+    no `LD_PRELOAD` line above it, confirming the running process is in
+    plain vendor mode, as intended.
+
+**This closes the open risk from §4: a real reboot of this device would
+no longer hit the `libcolib.so` failure**, because the fixed
+`fallback()` now sets `LD_LIBRARY_PATH` exactly as the success path
+already did. The incident is resolved, not merely worked around.
 
 ## Affected device paths
 
@@ -160,10 +196,12 @@ worked around for the single current (still-running) process instance.
 
 ## Scope of this document
 
-Documents a real incident on real hardware, already resolved for the
-*current* running process only. Does not change the "experimental,
-unqualified" status of the 0113 port, does not update `VENDOR_SHA256`,
-and does not authorize re-enabling the reactor hook or any further
-hardware action. The reboot-time `fallback()` bug remains open and
-should be fixed (in `firmware-launcher.sh` and, separately, on this
-device) before the disable marker is relied on across a reboot.
+Documents a real incident on real hardware. The address-generation
+mismatch (§1–§3) and the `fallback()` bug (§4) are both confirmed by
+direct evidence, and the `fallback()` bug is now fixed and verified by a
+real test (§7) — this incident is **resolved**, not merely worked
+around. This does not change the "experimental, unqualified" status of
+the 0113 port, does not update `VENDOR_SHA256`, and does not authorize
+re-enabling the reactor hook or any further hardware action. The
+provenance of the mismatched `8f78646d…` library (§6) remains
+unestablished and is a separate open question from the `fallback()` bug.
