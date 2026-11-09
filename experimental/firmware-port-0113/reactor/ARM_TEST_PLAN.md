@@ -64,11 +64,11 @@ met and recorded under "Result log" — never from artifact identity alone.
 
 ## 3. Test preparation (before any device step)
 
-- [ ] Full backup of the current on-device state (`/opt/bin/elegoo_printer`,
+- [x] Full backup of the current on-device state (`/opt/bin/elegoo_printer`,
   `/opt/lib/libcolib.so`, `/opt/usr/cc2-reactor-runtime-v2/`, relevant
   init scripts) taken and its own hash recorded.
-  - **Status 2026-11-09: PARTIAL — not ticked.** Copied from the device
-    to the operator's machine and hashed there:
+  - **Status 2026-11-09: DONE.** Copied from the device to the
+    operator's machine in two rounds and hashed there. First round:
 
     | File | SHA-256 of the local copy | Matches the hash read on the device? |
     |---|---|---|
@@ -77,28 +77,68 @@ met and recorded under "Result log" — never from artifact identity alone.
     | `/etc/init.d/cc2-reactor-launch` (before the `fallback()` fix) | `a8a736fdedba6efb5b3ddc1e636c33da33533083708374249493e3d97e9c0da8` | md5 `9e15e111…` matched the device |
     | `/opt/usr/cc2-reactor-runtime-v2/` without its `elegoo_printer` copy (tar archive) | `0aa007c4f4e2ff820de73ae5f363d95667ce0a5bc47b8fdb3c7ad1923cadb94f` | archive lists and extracts cleanly; contains `libcc2-reactor-v2.so` `8f78646d…` |
 
-  - Not in the backup: `/opt/bin/ec-eeb001-gui`, `/opt/bin/ai_camera`,
-    `/opt/inst/daemon-000/daemon-000`, the current `/etc/init.d/printer`
-    and `/opt/bin/run_printer.sh`, and `/opt/inst/cc2-reactor/`. The
-    runtime directory's own `elegoo_printer` copy was left out of the
-    archive; that it equals `/opt/bin/elegoo_printer` was not recorded.
-    Two earlier full-directory archive attempts were truncated in transfer
+  - Second round: one archive of 13 files. All 13 local hashes equal
+    the hashes read on the device at the same time:
+
+    | File | SHA-256 |
+    |---|---|
+    | `/opt/bin/ec-eeb001-gui` | `668ab8cb490c74eb5bbd769b421f6e4ade4e91fba322e22257496b9645f9ebfe` |
+    | `/opt/bin/ai_camera` | `90da7634c21b74b3bf943d68129da78668b47f9706620e158283697ab95553a7` |
+    | `/opt/inst/daemon-000/daemon-000` | `83433b14e49d1e8aa9523282ead03618378573f4b66de1ad8f7f3c444b11aada` |
+    | `/etc/init.d/printer` | `e7537298955e23b7a03cab4c8d7bd241c1dfcc070883cdf51c4889cd255d1bc4` |
+    | `/etc/init.d/cc2-reactor-launch` (with the device-side `fallback()` fix) | `8183b1273c91d4a6a27920ce7fe46b52a3bfdbf04eaa92bb8b3e27816db03de9` |
+    | `/opt/bin/run_printer.sh` | `05e4614779fc59b43c604eda7d85f1e8534b24d3cf284b16226c9c3bbc975118` |
+    | `/opt/inst/cc2-reactor/` (7 files) | as listed in its own `SHA256SUMS` (`84f8fb5d…`); includes `libcc2-reactor-v2.so` `8f78646d…` |
+
+  - The runtime directory's own `elegoo_printer` copy hashes to
+    `688b7bf8…`, the same as `/opt/bin/elegoo_printer`, so the backup of
+    the latter covers it.
+  - Two earlier full-directory archive attempts were truncated in transfer
     and are not usable.
-- [ ] Rollback path verified working *before* any new artifact is
+  - Not backed up: the vendor stock (unpatched) binaries. Returning the
+    device to stock ELEGOO binaries would need the files from the
+    official 02.01.01.13 package, which has not been unpacked for this.
+- [x] Rollback path verified working *before* any new artifact is
   installed — not assumed from a prior, unrelated rollback test.
-  - **Status 2026-11-09: NOT VERIFIED — not ticked.** One attempt was
-    made to write the backed-up, byte-identical `elegoo_printer` back to
-    `/opt/bin/elegoo_printer` with `scp` while the printer process was
-    running. It failed before writing:
-    `scp: dest open "/opt/bin/elegoo_printer": Failure`. The device file
-    hash was unchanged afterwards. The cause (file in use, mount state,
-    permissions, free space) has not been determined, so no working
-    rollback procedure for the binaries exists yet.
-  - A file under `/etc/init.d/` was replaced by `scp` successfully the
-    same day (the launcher fix), so writing to that path works; this says
-    nothing about `/opt/bin/`.
-  - Until this item is verified, no print test and no test that installs
-    or replaces a binary is started.
+  - **Status 2026-11-09: VERIFIED for `/opt/bin/elegoo_printer`**, by a
+    dress rehearsal that replaced it with its own byte-identical backup.
+  - **Why the first attempt failed.** Writing the backup straight onto
+    `/opt/bin/elegoo_printer` with `scp` failed with
+    `dest open "/opt/bin/elegoo_printer": Failure`. Checked on the device:
+    `/` (which holds `/opt/bin`) is a writable overlay, 385 MB free, owner
+    `root`, session runs as `uid=0`. Opening the real file for append
+    gave `ash: can't create elegoo_printer: Text file busy`, hash
+    unchanged. Cause: Linux refuses to open an executable for writing
+    while a process runs from it.
+  - **Procedure proven on a probe file first.** A copy of BusyBox started
+    as `sleep` in a scratch directory under `/opt/bin`: opening it for
+    writing gave `Text file busy`; uploading a second copy under another
+    name, checking its hash and `mv` over the running file succeeded
+    (`mv rc=0`), and the running process stayed alive. Scratch directory
+    removed afterwards.
+  - **Dress rehearsal on `elegoo_printer`** (no print job active):
+    1. `scp` the backup to `/opt/bin/elegoo_printer.rollback`.
+    2. On the device: abort unless its hash is `688b7bf8…`; `chmod 755`;
+       copy the current file to `elegoo_printer.prev` and abort unless
+       that hash is `688b7bf8…`; then
+       `mv elegoo_printer.rollback elegoo_printer`.
+       Result: `mv rc=0`, both files `688b7bf8…`. The running process
+       (PID 2411) kept running from the replaced file
+       (`/proc/2411/exe -> /opt/bin/elegoo_printer (deleted)`).
+    3. `run_printer.sh stop`, `run_printer.sh start`. Result: one process,
+       PID 2658, `/proc/2658/exe -> /opt/bin/elegoo_printer` (no
+       `(deleted)`), no `LD_PRELOAD` in its environment, file hash
+       `688b7bf8…`.
+  - **Scope.** Verified only for `elegoo_printer`, and only with
+    identical content: it shows the replacement path works, not that a
+    different binary would start. The same procedure is expected to work
+    for `ec-eeb001-gui` and `ai_camera`, but was not run for them, and
+    restarting them cleanly may need a full device reboot. A file under
+    `/etc/init.d/` was replaced with plain `scp` the same day (no process
+    runs from it).
+  - Rule for any later binary change: upload under a new name, check the
+    hash on the device, keep a `.prev` copy, `mv` into place, then restart
+    the process. Never write onto a running binary.
 - [ ] Start/stop procedure for the test build, verified against the actual
   launcher scripts in this repository (read directly, not assumed):
   - **Start (test-candidate path):** `experimental/firmware-port/launcher.sh`
@@ -217,7 +257,9 @@ State on 2026-11-09: no stage of section 5 has been run; the reactor is
 disabled on the test device. The hardware tests H1–H3 of
 [`../TEST_MATRIX.md`](../TEST_MATRIX.md) (Z-offset menu during a print,
 camera with remote access, OrcaSlicer upload/start/cancel) have not been
-run either, and are blocked by the unverified rollback path in section 3.
+run either. The rollback prerequisite in section 3 is now met for
+`elegoo_printer` (see above); H1–H3 install nothing, so they are no
+longer blocked by it.
 
 ## 7. Abort and rollback
 
