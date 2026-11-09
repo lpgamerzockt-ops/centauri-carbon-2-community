@@ -74,6 +74,10 @@ to derive them. It does **not** contain:
   offsets, function signatures, calling convention, and the
   exception/unwind boundary against the actual vendor binaries; unclear
   items are marked BLOCKER, not assumed compatible.
+- [`ABI_BLOCKER_RESOLUTION_0113.md`](ABI_BLOCKER_RESOLUTION_0113.md) —
+  follow-up resolving offset `108` (confirmed) and narrowing offsets
+  `20`/`248` and the exception/unwind boundary; still-open items remain
+  marked BLOCKER.
 - [`ARM_TEST_PLAN.md`](ARM_TEST_PLAN.md) — acceptance criteria and abort
   conditions for the still-outstanding hardware/ABI steps.
 
