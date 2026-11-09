@@ -63,6 +63,10 @@ deaktiviert, kein `LD_PRELOAD`. Gerätezeit (CST).
 |---|---|---|---|---|
 | H1 | 2026-11-10 | **PASS** | Datei `ECC2_0.6_first layer_Elegoo PLA+ _0.3_4m57s.gcode` (eine Schicht 0,3 mm, 80 × 80 mm, PLA+, 0,6-mm-Düse), Start ca. 05:54. Während des Drucks ließ sich das Z-Offset-Menü öffnen und bedienen; der Wert wurde mehrfach zwischen +0,05 und −0,05 mm verstellt, die Z-Achse reagierte hörbar. Druck regulär beendet. | Bediener-Beobachtung für Menü und Achse. `elegoo_printer` PID 2658 vor (05:52, 05:54) und nach dem Druck (06:08) gleich, Uptime durchgehend gestiegen: kein Absturz, kein Neustart. `GET :8081/api/printer` danach: `print.state = complete`, `z_offset.value = 0.035`. |
 
+| H2 | 2026-11-10 | **PASS** | Nach dem Wechsel aus dem LAN-Modus (siehe H5a) Kamerabild gleichzeitig offen in CC2 Control (lokal), ElegooSlicer und ELEGOO-App; alle drei laufen parallel mit minimaler Verzögerung. Vor dem Wechsel lief die Kamera lokal über Stunden stabil. | Bediener-Beobachtung. `GET :8081/api/printer`: `hardware.camera = true`, aktiver `camera_viewer`. Ob die App über den Cloud-Weg (WAN-RTC) verbunden war, ist nicht aus einem Log belegt; im Nicht-LAN-Modus ist das ihr vorgesehener Weg. |
+| H5a | 2026-11-10 | **PASS** | Netzwerkmodus vom Bediener von LAN auf Nicht-LAN umgestellt, am Gerät. Dieser Wechsel war der Auslöser des ursprünglichen Absturzes (`SIGSEGV`, `pc=0`), den der Netzwerk-Patch beheben soll. Kein Absturz, MQTT neu verbunden. | `elegoo_printer` PID 2658 vor (06:08) und nach dem Wechsel (06:34) gleich, Uptime 7381 s → 8941 s, kein Geräte-Neustart. CC2 Control danach: Meldung `code 2002` „connect mqtt success", `mqtt_connected` und `mqtt_registered` true. |
+| H5b | – | NOT RUN | Rückwechsel Nicht-LAN → LAN; Canvas-Reconnect nach dem Wechsel nicht geprüft. | – |
+
 Zu H1 nicht belegt:
 - **Einzelne Offset-Werte während des Drucks:** nicht protokolliert. Das Log
   des Druckerprozesses ging nach `/dev/null` (`/proc/2658/fd/1` und `fd/2`),

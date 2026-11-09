@@ -265,7 +265,12 @@ longer blocked by it.
   the limits of the evidence in [`../TEST_MATRIX.md`](../TEST_MATRIX.md),
   section "Ergebnisse auf echter Hardware". This is a test of the GUI
   patch, not of the reactor; section 5 stays NOT RUN.
-- H2, H3: NOT RUN.
+- H2 (camera locally and remotely at the same time): **PASS** on
+  2026-11-10.
+- H5a (switch from LAN to non-LAN mode, the trigger of the original
+  crash): **PASS** on 2026-11-10, no crash, same `elegoo_printer` PID.
+  H5b (switch back to LAN) not run.
+- H3: NOT RUN.
 
 ## 7. Abort and rollback
 
