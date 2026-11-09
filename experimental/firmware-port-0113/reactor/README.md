@@ -54,6 +54,16 @@ to derive them. It does **not** contain:
   tool meant to be run against this repository's current
   `experimental/firmware-port/reactor/` files (those remain pinned to
   02.01.01.07 and unchanged by this commit).
+- [`FINGERPRINT_VERIFICATION_0113.md`](FINGERPRINT_VERIFICATION_0113.md) —
+  a methodology correction (virtual address vs. file offset) and the
+  corrected 8-byte hook-entry fingerprint and `poll` PLT-target check,
+  run directly against the documented port target.
+- [`INSTRUCTION_DIFF_0113.md`](INSTRUCTION_DIFF_0113.md) — the full-body
+  instruction-level comparison of all four hook functions between the 07
+  and 0113 builds, and a correction of an earlier conflation with an
+  unrelated field in the existing `port-manifest.json`.
+- [`ARM_TEST_PLAN.md`](ARM_TEST_PLAN.md) — acceptance criteria and abort
+  conditions for the still-outstanding hardware/ABI steps.
 
 ## Open items before any further step
 

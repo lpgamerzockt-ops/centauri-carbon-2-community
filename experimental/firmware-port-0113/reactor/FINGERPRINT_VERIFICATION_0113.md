@@ -151,17 +151,18 @@ directly against it.
 
 ## Open items carried forward
 
-1. Full instruction-level body comparison (not just the 8-byte prologue)
-   for all four hook functions, with function sizes taken from the actual
-   target binary's own symbol table — not assumed from the existing
-   02.01.01.07 manifest's `old_size`/`new_size` fields. `dispatch_loop` and
-   `wait` specifically, since the existing manifest already flags them as
-   `instructions_equal_except_call_targets: false` against the old base.
+1. ~~Full instruction-level body comparison~~ — done, see
+   [`INSTRUCTION_DIFF_0113.md`](INSTRUCTION_DIFF_0113.md): all four hook
+   functions are instruction-identical between the 07 and 0113 builds
+   after normalizing call-target/immediate addresses. That document also
+   corrects an earlier conflation of this with the existing manifest's
+   unrelated `instructions_equal_except_call_targets: false` field.
 2. Struct/ABI layout, calling-convention, and exception-boundary
-   re-verification — none of this follows from matching entry bytes.
+   re-verification — none of this follows from matching entry bytes or
+   from the full-body instruction match in `INSTRUCTION_DIFF_0113.md`.
 3. Exact pinned toolchain (GCC 6.5.0 / glibc 2.23 /
-   `arm-cortex_a15-linux-gnueabihf`) still not demonstrated available on
-   this machine.
+   `arm-cortex_a15-linux-gnueabihf`) confirmed **not available** on this
+   machine as of 2026-11-09 — see `INSTRUCTION_DIFF_0113.md`.
 4. No ARM hardware/runtime qualification of the 02.01.01.13 reactor port
    was performed as part of this verification.
 
