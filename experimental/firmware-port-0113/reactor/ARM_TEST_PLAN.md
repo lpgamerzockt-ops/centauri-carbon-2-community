@@ -69,8 +69,47 @@ met and recorded under "Result log" — never from artifact identity alone.
   init scripts) taken and its own hash recorded.
 - [ ] Rollback path verified working *before* any new artifact is
   installed — not assumed from a prior, unrelated rollback test.
-- [ ] Start/stop procedure for the test build documented here before use:
-  **BLOCKED — command not yet verified against existing launcher.**
+- [ ] Start/stop procedure for the test build, verified against the actual
+  launcher scripts in this repository (read directly, not assumed):
+  - **Start (test-candidate path):** `experimental/firmware-port/launcher.sh`
+    is the direct test-candidate launcher. Read verbatim, it: (1) refuses to
+    run unless `$BASE/elegoo_printer` (`$BASE=/opt/usr/cc2-reactor-runtime-v2`)
+    hashes to the pinned `EXPECTED` value, (2) refuses unless
+    `$BASE/SHA256SUMS` verifies clean, (3) refuses if `LD_PRELOAD` is already
+    set in the environment, (4) otherwise sets
+    `CC2_REACTOR_RUNTIME_V2=1` and `LD_PRELOAD=$BASE/libcc2-reactor-v2.so`,
+    then `exec`s `$BASE/elegoo_printer "$@"`. So the verified start command,
+    once `$BASE` holds the test artifacts and a matching `SHA256SUMS`, is
+    exactly `sh experimental/firmware-port/launcher.sh` run as the user/context
+    that normally launches `elegoo_printer` — any of the hash/`LD_PRELOAD`
+    guards failing exits `125` without starting anything.
+  - **Full on-device path:** `builder/current/components/reactor/firmware-launcher.sh`
+    is the installed entry point that calls the above. Read verbatim, it
+    additionally: waits (up to 120 s) for `/opt/usr` to be mounted, checks a
+    `cc2-reactor-disabled` marker, checks `LD_PRELOAD` is unset, checks the
+    stock `/opt/bin/elegoo_printer` and `/opt/lib/libcolib.so` hashes against
+    the pinned `EXPECTED`/`libcolib.so` values, verifies `/opt/inst/cc2-reactor`'s
+    own `SHA256SUMS`, stages a fresh copy into `$BASE` only if the payload
+    hash changed, runs that staged copy's own `preflight.sh`, and only then
+    `exec`s `$BASE/launcher.sh "$@"` (which is the script above). Any guard
+    failing calls `fallback()`, which logs via `logger -t cc2-reactor` and
+    `exec`s the plain, unmodified `/opt/bin/elegoo_printer` instead — i.e. the
+    documented failure mode is a silent fall back to the stock binary, not a
+    crash or a stop.
+  - **Stop:** no stop/respawn logic exists in either launcher script or
+    anywhere else in this repository — both scripts end in `exec`, which
+    replaces the shell process with `elegoo_printer` and never returns to run
+    a stop path. Process supervision (what restarts or stops `elegoo_printer`
+    on the device, and how) is owned by the device's own init system outside
+    this repository's scope and is not documented here; inventing a stop
+    command would be unverified. The one process-identity check this
+    repository itself actually uses and verifies is `pidof elegoo_printer`,
+    confirmed directly in `cc2-control/scripts/launch.sh` and
+    `cc2-control/scripts/start-firmware.sh` — suitable for confirming the
+    process is (still) running, not for stopping it.
+  - This closes the "command not yet verified against existing launcher"
+    gate for *start*; it does not invent or verify a *stop* command, since
+    none exists in the sources checked.
 - [ ] Confirmed exactly one printer instance is used for this entire plan
   (no mixing results from more than one device or from a device that was
   reflashed mid-plan).
