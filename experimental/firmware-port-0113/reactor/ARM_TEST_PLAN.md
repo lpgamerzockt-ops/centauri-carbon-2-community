@@ -270,7 +270,15 @@ longer blocked by it.
 - H5a (switch from LAN to non-LAN mode, the trigger of the original
   crash): **PASS** on 2026-11-10, no crash, same `elegoo_printer` PID.
   H5b (switch back to LAN) not run.
-- H3: NOT RUN.
+- H3 (OrcaSlicer upload/start/cancel): **PARTIAL PASS** on 2026-11-10 —
+  upload and delete via the Community UI during a running print, plus
+  start/pause/cancel/return-to-idle, all passed with the same
+  `elegoo_printer` PID. The Port-80 upload path (where the patch's
+  status guards sit) was not reached: ElegooSlicer refuses the upload
+  itself while the printer is not idle, on stock firmware too. See
+  [`../TEST_MATRIX.md`](../TEST_MATRIX.md).
+- Not run: H4, H6, H7, H5b, and the Port-80 upload-during-print path.
+  No reactor stage of section 5 was run; the reactor stays disabled.
 
 ## 7. Abort and rollback
 
