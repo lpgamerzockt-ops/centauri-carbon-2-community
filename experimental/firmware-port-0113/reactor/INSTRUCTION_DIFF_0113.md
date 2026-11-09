@@ -9,9 +9,11 @@ Scope: the four reactor hook functions (`ReactorCallback::invoke`,
 
 ## What this confirms, and what it does not
 
-**Confirms:** after normalizing call-target addresses and immediate
-operands (see "Method" below), the full instruction sequence of all four
-functions is identical between the 07 and 0113 builds. This is a static
+**Confirms:** after individually resolving every differing instruction
+(see "Method" below — not a blanket normalization), all four functions are
+instruction- and control-flow-identical between the 07 and 0113 builds,
+with exactly one explained, behaviorally-inert content difference (an
+embedded `__FILE__` build path in a diagnostic log call). This is a static
 comparison of these four functions' own compiled bodies only.
 
 **Does not confirm:**
@@ -43,51 +45,92 @@ precondition for the instruction-level diff below, measured against
 `688b7bf8…` (the documented target) specifically, not assumed from the
 07-only manifest.
 
-## Method
+## Method (corrected — no blanket hex normalization)
+
+An earlier version of this document normalized *every* hex immediate in
+both disassembly listings to a placeholder before diffing. That was too
+coarse: it would have silently discarded a genuine difference in any
+non-branch instruction's immediate operand (a struct offset, a constant,
+or a data-pointer construction), not only the address-shift artifacts it
+was meant to hide. **That normalization is retracted** and replaced with
+the method below, which classifies every single differing line instead of
+discarding it.
 
 1. Disassembled each function's full address range in both binaries with
    `llvm-objdump -d` (same LLVM 23.1.5 build used in
-   `FINGERPRINT_VERIFICATION_0113.md`).
-2. Normalized call-target addresses and hex immediates to a placeholder
-   (`ADDR`), so that a uniform address shift (e.g. the `+0x2530` pattern
-   from `ADDRESS_MAPPING_0113.md`) does not register as a difference by
-   itself, while the mnemonic, register operands, and referenced symbol
-   names are preserved as-is. Example rule set:
-
-   ```sh
-   sed -E \
-     -e 's/#-0x[0-9a-f]+/#-ADDR/g' \
-     -e 's/#0x[0-9a-f]+/#ADDR/g' \
-     -e 's/0x[0-9a-f]+ </ADDR </g' \
-     -e 's/@ imm = #-0x[0-9a-f]+/@ imm = #-ADDR/g' \
-     -e 's/@ imm = #0x[0-9a-f]+/@ imm = #ADDR/g' \
-     -e 's/\+0x[0-9a-f]+>/+ADDR>/g'
-   ```
-
-   **Validated, not assumed correct:** this exact rule set was checked to
-   reproduce, byte-for-byte, the pre-existing
-   `old_check_timers.norm.asm`/`new_check_timers.norm.asm` files already
-   present in this port's analysis output (produced independently,
-   earlier) from their corresponding plain `.asm` disassembly — i.e. it
-   matches a normalization convention already used in this port, rather
-   than being a new, unchecked method.
-3. Stripped the leading address and raw-opcode-hex columns (which trivially
-   differ because of the address shift) from both normalized listings.
-4. Diffed the two resulting texts per function.
+   `FINGERPRINT_VERIFICATION_0113.md`), with no normalization applied.
+2. Paired up the two binaries' instruction streams 1:1 by position (valid
+   here because both report the same instruction count/size for every
+   function — see "Function sizes" above).
+3. For each instruction pair, compared the mnemonic and full operand text
+   verbatim. A pair is left as a flagged difference unless it is a
+   branch/call instruction (`bl`, `b`, `beq`, …) whose target resolves,
+   via `llvm-objdump`'s own `<symbol>` annotation, to the **same symbol
+   name** on both sides — that specific case is the one address-shift
+   artifact this method accepts automatically, because the symbol
+   identity (not the raw address) is what matters for whether the two
+   bodies call the same thing.
+4. Every other differing instruction (any non-branch instruction with a
+   different hex literal) is resolved individually: for a `movw`/`movt`
+   pair constructing an absolute address, the actual bytes at that address
+   in each binary are read and compared directly (see "Resolved
+   differences" below) — not inferred from the address alone.
 
 ## Result
 
-| Function | Diff after normalization |
-|---|---|
-| `ReactorCallback::invoke` | Identical (only the trivial filename header and the function's own address label differ) |
-| `SelectReactor::check_timers` | Identical (same) |
-| `PollReactor::dispatch_loop` | Identical (same) |
-| `ReactorCompletion::wait` | Identical (same) |
+| Function | Branch targets (symbol-identical) | Instructions identical as-is | Other differing instructions |
+|---|---|---|---|
+| `ReactorCallback::invoke` | 19 | 58 | 0 |
+| `SelectReactor::check_timers` | 42 | 163 | 0 |
+| `PollReactor::dispatch_loop` | 75 | 256 | 19 |
+| `ReactorCompletion::wait` | 35 | 109 | 6 |
 
-Every mnemonic, register operand, and referenced symbol name — including
-every internal branch target's resolved symbol name — matches line for
-line, for the full 308/820/1400/600-byte bodies, not only the leading 8
-bytes.
+`invoke` and `check_timers` have **no** differing instructions beyond
+symbol-identical branch targets — every other instruction, including all
+register operands and non-branch immediates, is identical as-is (no
+normalization needed or applied).
+
+`dispatch_loop` and `wait` each contain one or more `movw`/`movt` pairs
+that construct an absolute address of a string or data constant (used by
+an `spdlog::source_loc` diagnostic-logging call); these account for all
+19 (`dispatch_loop`, in 3 repeated call sites of 6 instructions each +
+one PC-relative literal-pool load) and 6 (`wait`, one call site)
+"other differing instructions". Each is resolved below, individually, by
+reading the actual bytes the constructed address points to in both
+binaries — not discarded as presumed address noise.
+
+## Resolved differences (every one, not sampled)
+
+| What the address points to | Old content | New content | Verdict |
+|---|---|---|---|
+| Function-name string (`dispatch_loop` call sites) | `"dispatch_loop"` | `"dispatch_loop"` | identical |
+| `__FILE__` build path (`dispatch_loop` call sites) | `/home/elegoo/workspace/FD0304/elegoo_printer/elegoo/reactor.cpp` | `/home/muge/eeb001/elegoo/reactor.cpp` | **differs** — see below |
+| Separator string (`dispatch_loop` call sites) | `"!!!!!!!!!!!!!!!!!!!"` (19 `!`) | `"!!!!!!!!!!!!!!!!!!!"` (19 `!`) | identical |
+| Function-name string (`wait` call site) | `"wait"` | `"wait"` | identical |
+| `__FILE__` build path (`wait` call site) | same as above | same as above | **differs**, same reason |
+| Separator string (`wait` call site) | `"!!!!!!!!!!!!!!!!!!!!!"` (21 `!`) | `"!!!!!!!!!!!!!!!!!!!!!"` (21 `!`) | identical |
+| PC-relative literal-pool double (`dispatch_loop`, one `vldr`) | `1000.0` | `1000.0` | identical (same function, shifted with it) |
+
+**The one genuine content difference found:** the compiler-embedded
+`__FILE__` path differs because the two binaries were built on different
+build machines/paths (`elegoo`/`workspace/FD0304` vs. `muge`/`eeb001`).
+This string is passed only to a diagnostic logging call
+(`spdlog::source_loc`) — it is not used in any control-flow, pointer
+arithmetic, or struct-layout decision in either function. The accompanying
+line-number argument to the same call (`#0x309` = 777) is identical on
+both sides, which is itself corroborating evidence this is the same
+source line in both builds, just compiled from a tree checked out at a
+different absolute path.
+
+## Corrected conclusion
+
+**Not "byte-identical."** All four functions are **instruction- and
+control-flow-identical**, including every branch target (by symbol
+identity) and every non-branch operand except the diagnostic-only
+`__FILE__` string, whose difference is fully explained and has no bearing
+on runtime behavior, struct layout, or ABI. This is a stronger, narrower,
+and individually-justified claim than the earlier, retracted "identical
+after normalization" statement.
 
 ## Correction: the existing manifest's `instructions_equal_except_call_targets: false` does not apply here
 
@@ -120,8 +163,9 @@ measured result elsewhere in this directory.
 
 ## What this suggests, cautiously
 
-Because the four functions' compiled bodies are byte-identical between
-builds, any constant struct-offset encoded directly in *their own*
+Because the four functions' compiled bodies are instruction-identical
+between builds (every operand individually resolved, not normalized
+away), any constant struct-offset encoded directly in *their own*
 instructions (e.g. a `vldr`/`ldr` with a fixed field offset) is also
 identical between builds — which is a narrow, indirect data point
 suggesting the specific struct layouts *these four functions themselves
@@ -139,7 +183,9 @@ exercised by this comparison at all.
   matching `ADDRESS_MAPPING_0113.md` exactly.
 - **Instruction-level re-diff (`dispatch_loop`/`wait` and the other two):**
   PASSED for the scope defined above (full-body comparison of these four
-  functions, post call-target/immediate normalization).
+  functions, every differing instruction individually resolved — one
+  explained, behaviorally-inert content difference found, no
+  normalization used).
 - **Toolchain match:** still **NOT AVAILABLE / BLOCKED** — no matching
   cross-compiler, no installed pinned toolchain, and no running container
   with the required build tools on this machine.
