@@ -99,6 +99,14 @@ to derive them. It does **not** contain:
   this repository does not have (the originally-intended toolchain).
 - [`ARM_TEST_PLAN.md`](ARM_TEST_PLAN.md) — acceptance criteria and abort
   conditions for the still-outstanding hardware/ABI steps.
+- [`INCIDENT_0113_ADDRESS_MISMATCH.md`](INCIDENT_0113_ADDRESS_MISMATCH.md) —
+  a real hardware incident: an unidentified, address-generation-mismatched
+  `libcc2-reactor-v2.so` was found active via `LD_PRELOAD` on a real 0113
+  device. Confirms (not hypothesizes) the mismatch by direct byte search,
+  explains why it did not visibly corrupt anything (fingerprint check held,
+  fail-closed), and documents a still-**open**, unfixed `fallback()` bug
+  (missing `LD_LIBRARY_PATH`) that would break printer startup again on a
+  real reboot.
 
 ## Open items before any further step
 
