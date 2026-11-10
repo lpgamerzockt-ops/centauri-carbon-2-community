@@ -103,19 +103,19 @@
 :root[data-theme="dracula"] {
   color-scheme: dark;
   --bg: #21222c; --panel: #282a36; --edge: #44475a; --text: #f8f8f2; --muted: #a4a9c8; --field: #343746; --ink: #282a36;
-  --cyan: #bd93f9; --green: #50fa7b; --amber: #ffb86c; --red: #ff5555; --blue: #8be9fd;
+  --cyan: #bd93f9; --green: #50fa7b; --amber: #ffb86c; --red: #ff7b7b; --blue: #8be9fd;
   --well: #191a21; --well-fg: #f8f8f2;
 }
 :root[data-theme="nord"] {
   color-scheme: dark;
   --bg: #2e3440; --panel: #3b4252; --edge: #4c566a; --text: #eceff4; --muted: #b4bfd3; --field: #434c5e; --ink: #2e3440;
-  --cyan: #9dcddb; --green: #a3be8c; --amber: #ebcb8b; --red: #ffb0b4; --blue: #81a1c1;
+  --cyan: #9dcddb; --green: #b6cba4; --amber: #ebcb8b; --red: #ffb0b4; --blue: #81a1c1;
   --well: #242933; --well-fg: #eceff4;
 }
 :root[data-theme="monokai"] {
   color-scheme: dark;
-  --bg: #1e1f1c; --panel: #272822; --edge: #49483e; --text: #f8f8f2; --muted: #a6a28c; --field: #3e3d32; --ink: #272822;
-  --cyan: #a6e22e; --green: #a6e22e; --amber: #fd971f; --red: #f92672; --blue: #66d9ef;
+  --bg: #1e1f1c; --panel: #272822; --edge: #49483e; --text: #f8f8f2; --muted: #afab98; --field: #3e3d32; --ink: #272822;
+  --cyan: #a6e22e; --green: #a6e22e; --amber: #fd971f; --red: #ff80b0; --blue: #66d9ef;
   --well: #191a15; --well-fg: #f8f8f2;
 }
 :root[data-theme="solarized-light"] {
