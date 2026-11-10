@@ -558,17 +558,17 @@ const Screws = () => {
   usePoll(refreshConsole, 2500) // the measurement result arrives in the console output
   const values = screwValues(screwText.use().text)
   const plan = values ? screwPlan(values) : null
-  const rows: [string, string, string][] = [
-    ['FL', '30,30', '1'],
-    ['FR', '230,30', '2'],
-    ['RR', '230,225', '3'],
-    ['RL', '30,225', '4'],
+  const rows: [Key, string, string][] = [
+    ['bed.corner_front_left', '30,30', '1'],
+    ['bed.corner_front_right', '230,30', '2'],
+    ['bed.corner_rear_right', '230,225', '3'],
+    ['bed.corner_rear_left', '30,225', '4'],
   ]
-  const plate: [number, string, string, string][] = [
-    [3, '4', 'RL', 'X30 Y225'],
-    [2, '3', 'RR', 'X230 Y225'],
-    [0, '1', 'FL', 'X30 Y30'],
-    [1, '2', 'FR', 'X230 Y30'],
+  const plate: [number, string, Key, string][] = [
+    [3, '4', 'bed.corner_rear_left', 'X30 Y225'],
+    [2, '3', 'bed.corner_rear_right', 'X230 Y225'],
+    [0, '1', 'bed.corner_front_left', 'X30 Y30'],
+    [1, '2', 'bed.corner_front_right', 'X230 Y30'],
   ]
   return (
     <Card id="screwFocus" class="flex-1">
@@ -580,7 +580,7 @@ const Screws = () => {
       <p class="mb-3 text-xs text-muted">{t('bed.nozzle_load_cell_measurement_at')}</p>
       <div class="grid gap-3 cc2-sm:grid-cols-[.9fr_1.1fr]">
         <div class="rounded-lg border border-edge p-3">
-          <div class="relative grid h-48 grid-cols-2 grid-rows-2 rounded-xl border-2 border-muted">
+          <div class="relative grid min-h-48 grid-cols-2 grid-rows-2 rounded-xl border-2 border-muted">
             <i class="absolute inset-y-2 left-1/2 border-l border-dashed border-edge" />
             <i class="absolute inset-x-2 top-1/2 border-t border-dashed border-edge" />
             {plate.map(([i, n, name, xy]) => {
@@ -597,7 +597,7 @@ const Screws = () => {
                   <b class="mb-0.5 grid size-6.5 place-items-center rounded-full border border-muted font-medium">
                     {n}
                   </b>
-                  {name}
+                  <span class="px-1 text-center leading-tight">{t(name)}</span>
                   <small class="text-xs text-muted">{xy}</small>
                   {plan && <span class="mt-0.5 text-[13px] font-bold">{microns(v)}</span>}
                 </div>
@@ -605,12 +605,13 @@ const Screws = () => {
             })}
           </div>
           <div class="mt-1.5 text-center text-xs text-muted">{t('bed.top_view_front_edge_at_bottom')}</div>
+          <div class="mt-1 text-center text-xs text-muted">{t('bed.measure_order')}</div>
           <div class="mt-2 flex justify-between text-xs text-muted">
             <span class="flex items-center gap-1">
-              <ArrowBigUp size={12} strokeWidth={1} /> Y (back)
+              <ArrowBigUp size={12} strokeWidth={1} /> {t('bed.axis_y_back')}
             </span>
             <span class="flex items-center gap-1">
-              <ArrowBigRight size={12} strokeWidth={1} /> X (right)
+              <ArrowBigRight size={12} strokeWidth={1} /> {t('bed.axis_x_right')}
             </span>
           </div>
         </div>
@@ -631,12 +632,12 @@ const Screws = () => {
                     ref = plan && !plan.useOptimized && i === 0
                   return (
                     <tr key={name} class={cn('border-t border-edge', plan?.useOptimized && i === 0 && 'bg-amber/10')}>
-                      <td class="p-2 font-semibold">{name}</td>
+                      <td class="p-2 font-semibold">{t(name)}</td>
                       <td class="p-2">{plan ? (ref ? t('bed.reference') : microns(d)) : '—'}</td>
                       <td class={cn('p-2', !within && plan && !ref && (d > 0 ? 'text-cyan' : 'text-red'))}>
                         {plan ? (
                           ref ? (
-                            '—'
+                            t('bed.leave_screw')
                           ) : within ? (
                             t('bed.within_tolerance')
                           ) : d > 0 ? (
@@ -681,7 +682,8 @@ const Screws = () => {
           })}
         </Notice>
       )}
-      <div class="mt-3">
+      <p class="mt-3 text-xs text-muted">{t('bed.measure_heats')}</p>
+      <div class="mt-2">
         <Button
           onClick={async () => {
             if (measuring.current) return
