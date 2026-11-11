@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { ListOrdered, Minus, Play, Plus } from 'lucide-preact'
 import { store } from '@/lib/store'
 import { addToQueue, refreshQueue } from '@/lib/queue'
@@ -11,6 +11,9 @@ import { canvasHex, canvasModel } from '@/lib/canvas'
 import { meshRoot } from '@/lib/mesh'
 import { nearestMeasure, nozzleName, type PlateLibrary, usable } from '@/lib/plates'
 import { openPage, printer } from '@/lib/state'
+import { TimelapseSettingsLink } from '@/pages/TimelapseSettings'
+import { fetchTimelapseSettings } from '@/lib/timelapse-settings'
+import { timelapseLowSpace } from '@/lib/timelapse-presets'
 import { EXTERNAL, findSpool, g, spoolGrams, spoolLabel, type SpoolLibrary } from '@/lib/spools'
 
 type Pending = {
@@ -161,6 +164,7 @@ const Form = ({ job }: { job: Pending }) => {
   const [side, setSide] = useState<'A' | 'B'>('A')
   const [calibrate, setCalibrate] = useState(false)
   const [timelapse, setTimelapse] = useState(false)
+  const [timelapseSpaceWarn, setTimelapseSpaceWarn] = useState(false)
   // Start now, or keep the job with these choices in the print queue (copies are separate prints).
   const [launch, setLaunch] = useState<'now' | 'queue'>('now')
   const [copies, setCopies] = useState(1)
@@ -206,6 +210,15 @@ const Form = ({ job }: { job: Pending }) => {
         ? measure
         : nearest?.id || ''
       : ''
+  useEffect(() => {
+    if (!timelapse) {
+      setTimelapseSpaceWarn(false)
+      return
+    }
+    void fetchTimelapseSettings()
+      .then(s => setTimelapseSpaceWarn(timelapseLowSpace(s.picture_space, s.video_space)))
+      .catch(() => setTimelapseSpaceWarn(false))
+  }, [timelapse])
   // Spool tracking: the spool each tool would draw from, and whether it holds what the slicer expects.
   const supply = (tool: number) => {
     const lib = job.spools
@@ -522,6 +535,14 @@ const Form = ({ job }: { job: Pending }) => {
           />
           {t('print.enable_timelapse')}
         </label>
+        <div class="mt-1">
+          <TimelapseSettingsLink />
+        </div>
+        {timelapse && timelapseSpaceWarn ? (
+          <p class="mt-1 text-xs text-amber" role="status">
+            {t('print.timelapse_low_space_warning')}
+          </p>
+        ) : null}
         <fieldset class="my-4 rounded-lg border border-cyan/60 p-3" data-print-launch>
           <legend class="px-1.5 font-semibold text-cyan">{t('print.launch')}</legend>
           <div class="flex flex-wrap items-center gap-3.5">

@@ -201,6 +201,8 @@ relative to `fix_ref_temperature`) is read from the printer configuration; a mea
   the browser, and shares the two-transfer limit of G-code downloads. That service sends `Content-Length`
   together with chunked framing and keeps the connection open after the response; CC2 Control relays the
   chunked framing and ends the transfer at the last chunk.
+- `GET /api/timelapse/settings` returns the current `[timelapse]` section from `/opt/usr/cfg/timelapse.cfg` (defaults when missing). `firmware_support` is `false` until a firmware build reads the file. Includes `picture_space` / `video_space` (`available_bytes` via `statvfs` when the path exists) and `usb_storage_root`.
+- `POST /api/timelapse/settings` accepts JSON with the same fields; requires an idle printer (`409` otherwise). Validates paths under `/opt/usr/`, under **`/mnt/exUDISK/…`** (USB stick mount used for G-code storage; requires a subdirectory, not the mount root alone), and `/tmp/` for the temp symlink. Does not change live capture until Phase 3 firmware.
 
 The printer lists its last 50 jobs (`result.total` was 50 on the tested printer) and ignores
 `offset`/`limit` parameters.

@@ -44,16 +44,26 @@ import { Updates } from './Updates'
 import { Backup } from './Backup'
 import { Experiments } from './Experiments'
 import { Network } from './Network'
+import { TimelapseSettingsPage } from './TimelapseSettings'
 
 const TABS = [
   [Link, 'network.connections'],
   [Plug, 'settings.integrations'],
+  [Activity, 'settings.timelapse_tab'],
   [Palette, 'settings.appearance'],
   [Info, 'settings.about'],
   [RefreshCw, 'updates.title'],
   [Archive, 'backup.title'],
 ] as const
-const TAB_ROUTES: SettingsTab[] = ['connection', 'integrations', 'appearance', 'about', 'updates', 'backup']
+const TAB_ROUTES: SettingsTab[] = [
+  'connection',
+  'integrations',
+  'timelapse',
+  'appearance',
+  'about',
+  'updates',
+  'backup',
+]
 const G = { size: 16, strokeWidth: 1 }
 const Dot = () => <i class="inline-block size-2 rounded-full bg-current align-middle" />
 const Field = ({ label, help, htmlFor, children }: { label: Key; help?: Key; htmlFor?: string; children: any }) => (
@@ -526,10 +536,11 @@ export const Settings = () => {
               <Experiments />
             </>
           )}
-          {tab === 2 && <Appearance />}
-          {tab === 4 && <Updates />}
-          {tab === 5 && <Backup />}
-          {tab === 3 && (
+          {tab === 2 && <TimelapseSettingsPage />}
+          {tab === 3 && <Appearance />}
+          {tab === 5 && <Updates />}
+          {tab === 6 && <Backup />}
+          {tab === 4 && (
             <Card>
               <CardHead icon="info" title="settings.about" />
               <p class="mb-4 max-w-2xl text-[13px] leading-relaxed">{t('settings.cc2_control_is_the_local_control')}</p>

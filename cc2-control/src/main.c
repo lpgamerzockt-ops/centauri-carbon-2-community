@@ -3279,9 +3279,12 @@ static const char *printer_change_blocked(void);
 #include "spoolman.h"
 #include "sha256.h"
 #include "canvas_unload.h"
+#include "timelapse_settings.h"
 #include "runout.h"
 #include "calibration_tools.h"
 #include "cavity_floor_http.h"
+
+const char *cc2_timelapse_settings_file = "/opt/usr/cfg/timelapse.cfg";
 
 /* GET /api/mesh. The firmware builds `{"bed_mesh":null}` with every stored profile and all its points
  * on the thread that schedules the motors: with many profiles (29-39 KB) that took 615 ms on a CC2
@@ -4309,6 +4312,10 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
         timelapse_generate_response(fd,mqtt,body,body_len);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/history/timelapse")==0) {
         return timelapse_download_start(fd,mqtt,query);
+    } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/timelapse/settings")==0) {
+        timelapse_settings_get(fd);
+    } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/timelapse/settings")==0) {
+        timelapse_settings_post(fd,mqtt,body,body_len);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/material-presets")==0) {
         presets_get_response(fd);
     } else if (strcmp(method,"PUT")==0 && strcmp(path,"/api/material-presets")==0) {
@@ -4532,6 +4539,7 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--update-ca") == 0 && i + 1 < argc) app_update_ca = argv[++i];
         else if (strcmp(argv[i], "--update-runner") == 0 && i + 1 < argc) app_update_runner = argv[++i];
         else if (strcmp(argv[i], "--preferences") == 0 && i + 1 < argc) ui_preferences_path = argv[++i];
+        else if (strcmp(argv[i], "--timelapse-settings") == 0 && i + 1 < argc) cc2_timelapse_settings_file = argv[++i];
         else if (strcmp(argv[i], "--plates") == 0 && i + 1 < argc) plates_path = argv[++i];
         else if (strcmp(argv[i], "--spools") == 0 && i + 1 < argc) spools_path = argv[++i];
         else if (strcmp(argv[i], "--queue") == 0 && i + 1 < argc) queue_path = argv[++i];

@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Settings → Timelapse & video: save capture, encoder and storage defaults on the printer (`/opt/usr/cfg/timelapse.cfg` via `GET`/`POST /api/timelapse/settings`); stock firmware does not apply them until a Phase 3 `ai_camera` build reads the file. Per-print timelapse checkbox unchanged (`delay_video` via MQTT). By **Manuel** via **lpgamerzockt-ops**.
+
 - Show live application update progress and a filtered installer log, and retire a failed panel status once a successful installation is confirmed. Requested by **pezso92** (#331).
 
 - Add the Turkish interface translation using the contributed language patch.
