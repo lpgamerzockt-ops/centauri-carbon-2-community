@@ -45,7 +45,7 @@ try {
     window.fetch=(url,opts={})=>{
       if(String(url).includes('/api/printer')) return original(url,opts).then(async r=>{
         const d=await r.json();d.print.filename=state.filename
-        d.print.current_layer=state.layer;d.print.total_layers=state.totalLayers
+        d.print.current_layer=state.layer;d.print.total_layers=state.totalLayers;d.print.duration=600
         d.motion={...d.motion,x:128,y:128,z:28.6}
         return new Response(JSON.stringify(d),{headers:{'Content-Type':'application/json'}})
       })

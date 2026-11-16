@@ -505,15 +505,18 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
 }
 .cc2-layer-path-status {
   position: absolute;
-  inset: 0;
+  top: 8px;
+  right: 8px;
   z-index: 2;
-  display: grid;
-  place-items: center;
-  background: color-mix(in srgb, var(--field) 78%, transparent);
-  color: var(--text);
-  font-size: 14px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--field) 85%, transparent);
+  color: var(--muted);
+  font-size: 12px;
   pointer-events: none;
 }
+.cc2-layer-path-stale { opacity: .35; }
+.cc2-layer-path-direction { fill: var(--cyan); opacity: .7; }
 
 /* Keep the compact query identical to COMPACT in components/layout.tsx: the sheet starts
    below the header so the emergency stop stays visible and tappable on a phone. */

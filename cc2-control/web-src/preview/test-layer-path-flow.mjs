@@ -30,6 +30,7 @@ try {
           d.print.filename = state.filename
           d.print.current_layer = state.layer
           d.print.total_layers = state.totalLayers
+          d.print.duration = state.duration ?? 600
           d.motion = { ...d.motion, x: state.nozzleX, y: 128, z: state.layer * 0.2 }
           return json(d)
         })
@@ -152,7 +153,9 @@ try {
   await page.evaluate(() => (window.__CC2_PREVIEW.scan.busyUntil = performance.now() + 2500))
   await set({ layer: 20 })
   await waitLog('20:503')
-  assert.ok(await dialog.getByText('Loading layer…', { exact: true }).count(), 'busy is shown as loading')
+  await page.waitForFunction(() => /Layer 10 shown · printer at 20, loading…/.test(document.querySelector('[data-layer-status]')?.textContent || ''))
+  assert.equal(await dialog.getByText('Loading layer…', { exact: true }).count(), 0, 'a path already on screen is not covered by loading')
+  assert.ok(await dialog.locator('[data-layer-path="printed"], [data-layer-path="remain"]').count(), 'layer 10 stays visible while 20 is busy')
   assert.equal(await unavailable(), 0, 'busy is not shown as unavailable')
   await waitLayer(20)
   const busy = await log()
@@ -225,6 +228,68 @@ try {
   const reopened = await log()
   assert.ok(reopened.filter(e => e === '40:200').length === 2, `layer 40 rescanned once after reopening: ${reopened}`)
 
+  // The printer changes layer faster than the reply. The in-flight path is drawn
+  // and named as behind; the view does not stay on "Loading layer…". Then the
+  // newest layer is requested, skipping the ones the printer already left.
+  await clearLog()
+  await setScan({ durations: { 60: 1200, 63: 800 } })
+  await set({ layer: 60 })
+  await waitLog('60:200')
+  await set({ layer: 63 })
+  await page.waitForFunction(() => {
+    const status = document.querySelector('[data-layer-status]')?.textContent || ''
+    const drawn = Array.from(document.querySelectorAll('[data-layer-path="printed"], [data-layer-path="remain"]')).some(el =>
+      (el.getAttribute('points') || '').split(' ').includes(`200,${256 - (20 + (60 % 50))}`)
+    )
+    return drawn && status.includes('Layer 60 shown · printer at 63, loading…')
+  })
+  assert.equal(await dialog.getByText('Loading layer…', { exact: true }).count(), 0, 'loading does not cover the path that already arrived')
+  await waitLayer(63)
+
+  const jumped = await log()
+  assert.ok(jumped.includes('60:200') && jumped.includes('63:200'), `finished the slow layer, then the newest: ${jumped}`)
+  assert.ok(!jumped.some(e => e.startsWith('61:')), `does not scan layers the printer already left: ${jumped}`)
+  const at63 = jumped.indexOf('63:200')
+  const at62 = jumped.indexOf('62:200')
+  assert.ok(at62 === -1 || at62 > at63, `layer 62 is only the previous layer, after 63: ${jumped}`)
+
+  // One layer behind for a moment is the normal load of the next layer: the status
+  // names the drawn layer with the total and does not flash the lag or its hint.
+  await clearLog()
+  await setScan({ durations: { 64: 900 } })
+  await set({ layer: 64 })
+  await page.waitForTimeout(300)
+  const brief = await dialog.locator('[data-layer-status]').innerText()
+  assert.match(brief, /^Layer 63 \/ 227/, `a short one-layer lag keeps the plain status: ${brief}`)
+  assert.equal(await dialog.getByText('printer at', { exact: false }).count(), 0, 'a short one-layer lag is not named')
+  await waitLayer(64)
+
+  // No path yet, and the scan outlasts the stated 20 s budget: say so, then show the path when it arrives.
+  // Close first so the next open starts with an empty path. A new filename would close the map by itself.
+  await dialog.getByRole('button', { name: 'Close bed map', exact: true }).click()
+  await page.waitForFunction(() => document.querySelectorAll('[role=dialog]').length === 0)
+  await clearLog()
+  const polls = await page.evaluate(() => window.__CC2_PREVIEW.printerPolls || 0)
+  await setScan({ durations: { 70: 22000 } })
+  await set({ layer: 70 })
+  await page.waitForFunction(n => window.__CC2_PREVIEW.printerPolls > n, polls)
+  await openLayerTab()
+  await waitLog('70:200')
+  await page.waitForFunction(
+    () => document.querySelector('[data-layer-status]')?.textContent.includes('Layer path did not answer in time'),
+    { timeout: 25000 }
+  )
+  assert.equal(await dialog.getByText('Loading layer…', { exact: true }).count(), 0, 'the loading text ends at the timeout')
+  await page.waitForFunction(
+    n =>
+      new RegExp(`Layer ${n} / 227`).test(document.querySelector('[data-layer-status]')?.textContent || '') &&
+      Array.from(document.querySelectorAll('[data-layer-path="printed"], [data-layer-path="remain"]')).some(el =>
+        (el.getAttribute('points') || '').split(' ').includes(`200,${256 - (20 + (n % 50))}`)
+      ),
+    70,
+    { timeout: 10000 }
+  )
+
   // The backend gives up on a layer (scan budget): the view says so, and the next layer loads.
   await clearLog()
   await setScan({ limit: { 50: true } })
@@ -237,9 +302,69 @@ try {
   await set({ layer: 51 })
   await waitLayer(51)
 
+  // A new print that still reports the previous job's layer (seen: layer 193 right after a start):
+  // Live does not scan it. Young prints only follow layers that climb from the start; a jump waits
+  // until the print is older than the start grace.
+  await clearLog()
+  // First a layer above the new job's layer count (1000 from a long previous print, the new one has 193).
+  await set({ filename: 'restart.gcode', totalLayers: 193, layer: 1000, duration: 600 })
+  // A new job closes the bed map; open it again on the layer path.
+  await page.waitForFunction(() => !document.querySelector('[role="dialog"]'))
+  await openLayerTab()
+  await page.waitForTimeout(2500)
+  assert.ok(!(await log()).some(e => e.startsWith('1000:')), `a layer above the layer count is not scanned: ${await log()}`)
+  await set({ layer: 193, duration: 5 })
+  await page.waitForTimeout(2500)
+  assert.ok(!(await log()).some(e => e.startsWith('193:')), `stale layer not scanned: ${await log()}`)
+  await page.waitForFunction(() => document.querySelector('[data-layer-status]')?.textContent.includes('Waiting for layer 1'))
+  await set({ layer: 1, duration: 8 })
+  await waitLog('1:200')
+  await set({ layer: 2, duration: 12 })
+  await waitLog('2:200')
+  await set({ layer: 150, duration: 15 })
+  await page.waitForTimeout(2500)
+  assert.ok(!(await log()).some(e => e.startsWith('150:')), `a jump in a young print is not followed: ${await log()}`)
+  // A stale layer can stand for minutes (heating, homing, probing): still not followed after 4 minutes.
+  await set({ duration: 240 })
+  await page.waitForTimeout(2000)
+  assert.ok(!(await log()).some(e => e.startsWith('150:')), `a standing jump is not followed while the print is young: ${await log()}`)
+  // A value that steps up by one is live, not stale: followed at once.
+  await set({ layer: 151, duration: 250 })
+  await waitLog('151:200')
+  // An old print follows any layer.
+  await set({ layer: 170, duration: 400 })
+  await waitLog('170:200')
+  await set({ filename: 'flow.gcode', totalLayers: 227, layer: 51, duration: 600 })
+  await page.waitForFunction(() => !document.querySelector('[role="dialog"]'))
+  await openLayerTab()
+  await waitLayer(51)
+
+  // Phone width: the longer catch-up text wraps on its own line instead of being clipped,
+  // and the map does not move when it appears.
+  await page.setViewportSize({ width: 390, height: 844 })
+  await set({ layer: 125 })
+  await waitLayer(125)
+  const phone = () =>
+    page.evaluate(() => {
+      const status = document.querySelector('[data-layer-status]')
+      return {
+        text: status.textContent,
+        fits: status.scrollWidth <= status.clientWidth && status.getBoundingClientRect().right <= document.documentElement.clientWidth,
+        mapTop: Math.round(document.querySelector('[role="dialog"] .cc2-object-map-frame').getBoundingClientRect().top),
+      }
+    })
+  const steady = await phone()
+  await setScan({ durations: { 127: 6000 } })
+  await set({ layer: 127 })
+  await page.waitForFunction(() => /Layer 125 shown · printer at 127, loading…/.test(document.querySelector('[data-layer-status]')?.textContent || ''))
+  const behind = await phone()
+  assert.ok(steady.fits && behind.fits, `status fits at phone width: ${JSON.stringify([steady, behind])}`)
+  assert.equal(behind.mapTop, steady.mapTop, 'the map does not move when the catch-up text appears')
+  await page.setViewportSize({ width: 1440, height: 1000 })
+
   assert.deepEqual(errors, [])
   console.log(
-    'PASS: layer path flow with a one-scan backend: waiting for layer 1 while preparing, cold cache, layer 1 -> 2, current before previous, busy retry, rapid stepping, back to Live, nozzle updates without fetch, obsolete responses, close/reopen, scan limit reported'
+    'PASS: layer path flow with a one-scan backend: waiting for layer 1 while preparing, cold cache, layer 1 -> 2, current before previous, busy retry, rapid stepping, back to Live, nozzle updates without fetch, obsolete responses, close/reopen, scan limit reported, stale layer after a print start, catch-up text at phone width'
   )
 } finally {
   await browser.close()
