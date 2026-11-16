@@ -253,8 +253,10 @@ static void memory_values(long *total, long *available) {
     fclose(file);
 }
 
+static void layer_path_health_json(char *out, size_t cap);
 static void health_response(int fd, const mqtt_client *mqtt) {
-    char body[768];
+    char body[1280], layer_path[320];
+    layer_path_health_json(layer_path, sizeof(layer_path));
     char load[96] = "unknown";
     long uptime = read_first_long("/proc/uptime");
     long mem_total, mem_available;
@@ -270,10 +272,10 @@ static void health_response(int fd, const mqtt_client *mqtt) {
         "\"mode\":\"protected-control\",\"uptime_seconds\":%ld,"
         "\"mem_total_kb\":%ld,\"mem_available_kb\":%ld,"
         "\"loadavg\":\"%s\",\"mqtt_connected\":%s,\"mqtt_registered\":%s,"
-        "\"snapshot_received\":%s,\"mqtt_received_publishes\":%lu,\"mqtt_skipped_requests\":%lu,\"mqtt_skipped_request_bytes\":%lu,\"mqtt_oversized_packets\":%lu,\"mqtt_oversized_snapshots\":%lu,\"mqtt_oversized_replies\":%lu}\n",
+        "\"snapshot_received\":%s,\"mqtt_received_publishes\":%lu,\"mqtt_skipped_requests\":%lu,\"mqtt_skipped_request_bytes\":%lu,\"mqtt_oversized_packets\":%lu,\"mqtt_oversized_snapshots\":%lu,\"mqtt_oversized_replies\":%lu,%s}\n",
         uptime, mem_total, mem_available, load, mqtt->connected ? "true" : "false",
         mqtt->registered ? "true" : "false", mqtt->snapshot_len ? "true" : "false",
-        mqtt->received_publishes,mqtt->skipped_requests,mqtt->skipped_request_bytes,mqtt->oversized_packets,mqtt->oversized_snapshots,mqtt->oversized_replies);
+        mqtt->received_publishes,mqtt->skipped_requests,mqtt->skipped_request_bytes,mqtt->oversized_packets,mqtt->oversized_snapshots,mqtt->oversized_replies,layer_path);
     if (length < 0 || (size_t)length >= sizeof(body)) return;
     respond(fd, 200, "OK", "application/json; charset=utf-8", body, (size_t)length);
 }
@@ -4429,6 +4431,40 @@ static int http_request_complete(const char *request,size_t used){
     return used>=header+length;
 }
 
+/* Refuses a layer-path request before any G-code is read when it names the file of the running print
+ * and cannot belong to that print: a layer above the print's layer count, or a layer above 1 while the
+ * service has not yet seen the print reach layer 1 (a new print can still show the layer of the one before
+ * it, seen: layer 193 right after a start, a 20 s scan of 78.7 MB). Requests for other files, and any
+ * request while no print runs (browsing by hand), pass. The reply is 409, which the page does not retry.
+ * The layer the service has seen is the one /api/printer reports, which a new print resets to 0. */
+static int layer_path_guard(int fd,const mqtt_client *mqtt,const char *query){
+    char storage[16],file[LAYER_PATH_NAME_MAX];int layer=0;
+    if(gcode_layer_path_query(query,storage,file,&layer)!=LAYER_PATH_OK||strcmp(storage,"internal"))return 0;
+    time_t now=time(NULL);
+    int active_job=mqtt->connected&&mqtt->registered&&mqtt->last_message>0&&now-mqtt->last_message<=15&&
+        mqtt->have_machine_status&&mqtt->machine_status==2&&mqtt->filename[0]&&
+        (!strcmp(mqtt->print_state,"printing")||!strcmp(mqtt->print_state,"paused"));
+    if(!active_job)return 0;
+    const char *job=mqtt->filename;
+    if(!strncmp(job,"local/",6))job+=6;
+    if(strcmp(job,file))return 0;
+    double live;int current_layer=mqtt->current_layer;
+    if(uds_job_matches(&telemetry,mqtt->filename)&&uds_value(&telemetry,U_LAYER,&live))current_layer=(int)live;
+    int file_layers=active_gcode_total_layers(mqtt->filename);
+    int total_layers=mqtt->have_total_layers?mqtt->total_layers:file_layers;
+    if(total_layers>0&&layer>total_layers){
+        layer_path_count_rejected();
+        layer_path_fail(fd,409,"Conflict","Layer is beyond the running print");
+        return 1;
+    }
+    if(layer>1&&current_layer<1){
+        layer_path_count_rejected();
+        layer_path_fail(fd,409,"Conflict","The running print has not reached that layer");
+        return 1;
+    }
+    return 0;
+}
+
 static int handle_client(int fd,char *request,size_t used,const char *web_root,mqtt_client *mqtt,console_state *console){
     /* A full initial read may contain a valid header followed by upload bytes.
      * Reject only oversized headers, not a streaming body's first chunk. */
@@ -4654,6 +4690,7 @@ static int handle_client(int fd,char *request,size_t used,const char *web_root,m
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files/download")==0) {
         return gcode_download_start(fd,query);
     } else if (strcmp(method,"GET")==0 && strcmp(path,"/api/gcode-files/layer-path")==0) {
+        if(layer_path_guard(fd,mqtt,query))return 0;
         return gcode_layer_path_start(fd,query);
     } else if (strcmp(method,"POST")==0 && strcmp(path,"/api/gcode-files/inspect")==0) {
         return analysis_start(fd,0,body,body_len);

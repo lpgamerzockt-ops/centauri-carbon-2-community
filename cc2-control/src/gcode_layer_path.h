@@ -40,6 +40,28 @@ typedef struct {
     double z;
 } layer_path_info;
 
+/* One remembered layer start: the file offset of its marker line and the motion
+ * state from just before that line (position, absolute/relative, extrusion mode,
+ * layer counters). A later layer seeks here instead of rereading the file.
+ * The table stays small: at most LAYER_PATH_INDEX_MAX entries, about 64 bytes each. */
+#define LAYER_PATH_INDEX_MAX 1024
+enum {
+    LAYER_PATH_F_ABS_XY = 1 << 0,
+    LAYER_PATH_F_ABS_E = 1 << 1,
+    LAYER_PATH_F_HAVE_XY = 1 << 2,
+    LAYER_PATH_F_HAVE_E = 1 << 3,
+    LAYER_PATH_F_HAVE_Z = 1 << 4,
+    LAYER_PATH_F_SEEN = 1 << 5,
+    LAYER_PATH_F_CHANGE = 1 << 6
+};
+typedef struct {
+    int layer; /* 0-based layer this marker starts */
+    int current, max_layer, total_hint, changes;
+    int flags;
+    double x, y, z, e;
+    long long offset;
+} layer_path_mark;
+
 static int layer_path_deadline(const struct timespec *start, long milliseconds) {
     if (!start || milliseconds <= 0) return 0;
     struct timespec now;
@@ -520,11 +542,81 @@ static int layer_path_word_line(layer_path_state *s, const char *line, int targe
     return 0;
 }
 
-static int gcode_layer_path_parse(FILE *file, int layer_1based,
-                                  layer_point *points, int points_cap,
-                                  int *path_start, int paths_cap,
-                                  layer_path_info *info,
-                                  const struct timespec *start, long time_ms, size_t bytes_max) {
+static int layer_path_state_flags(const layer_path_state *s) {
+    return (s->abs_xy ? LAYER_PATH_F_ABS_XY : 0) |
+           (s->abs_e ? LAYER_PATH_F_ABS_E : 0) |
+           (s->have_xy ? LAYER_PATH_F_HAVE_XY : 0) |
+           (s->have_e ? LAYER_PATH_F_HAVE_E : 0) |
+           (s->have_z ? LAYER_PATH_F_HAVE_Z : 0) |
+           (s->seen_marker ? LAYER_PATH_F_SEEN : 0) |
+           (s->change_mode ? LAYER_PATH_F_CHANGE : 0);
+}
+
+static void layer_path_restore(layer_path_state *s, const layer_path_mark *m) {
+    s->x = m->x;
+    s->y = m->y;
+    s->z = m->z;
+    s->e = m->e;
+    s->abs_xy = (m->flags & LAYER_PATH_F_ABS_XY) ? 1 : 0;
+    s->abs_e = (m->flags & LAYER_PATH_F_ABS_E) ? 1 : 0;
+    s->have_xy = (m->flags & LAYER_PATH_F_HAVE_XY) ? 1 : 0;
+    s->have_e = (m->flags & LAYER_PATH_F_HAVE_E) ? 1 : 0;
+    s->have_z = (m->flags & LAYER_PATH_F_HAVE_Z) ? 1 : 0;
+    s->seen_marker = (m->flags & LAYER_PATH_F_SEEN) ? 1 : 0;
+    s->change_mode = (m->flags & LAYER_PATH_F_CHANGE) ? 1 : 0;
+    s->current = m->current;
+    s->max_layer = m->max_layer;
+    s->total_hint = m->total_hint;
+    s->changes = m->changes;
+}
+
+/* First offset for a layer wins. When the table is full, a later layer replaces
+ * the highest entry so the next request can still seek near the end. */
+static void layer_path_mark_add(layer_path_mark *marks, int *count, int cap, int layer, const layer_path_mark *shot) {
+    if (!marks || !count || cap <= 0 || layer < 0 || !shot) return;
+    int n = *count;
+    int lo = 0, hi = n;
+    while (lo < hi) {
+        int mid = lo + (hi - lo) / 2;
+        if (marks[mid].layer < layer) lo = mid + 1;
+        else hi = mid;
+    }
+    if (lo < n && marks[lo].layer == layer) return;
+    layer_path_mark copy = *shot;
+    copy.layer = layer;
+    if (n >= cap) {
+        if (n > 0 && layer > marks[n - 1].layer) marks[n - 1] = copy;
+        return;
+    }
+    if (lo < n) memmove(&marks[lo + 1], &marks[lo], (size_t)(n - lo) * sizeof(*marks));
+    marks[lo] = copy;
+    *count = n + 1;
+}
+
+/* Greatest stored layer start at or before target0. */
+static int layer_path_mark_pick(const layer_path_mark *marks, int count, int target0, layer_path_mark *out) {
+    int best = -1;
+    int lo = 0, hi = count;
+    while (lo < hi) {
+        int mid = lo + (hi - lo) / 2;
+        if (marks[mid].layer <= target0) { best = mid; lo = mid + 1; }
+        else hi = mid;
+    }
+    if (best < 0 || !out) return 0;
+    *out = marks[best];
+    return 1;
+}
+
+/* resume NULL reads from the start, exactly as before. marks may be NULL.
+ * A resume seeks to the marker and replays it with the saved motion state, so
+ * the points match a scan that started at the first byte. */
+static int gcode_layer_path_parse_at(FILE *file, int layer_1based,
+                                     layer_point *points, int points_cap,
+                                     int *path_start, int paths_cap,
+                                     layer_path_info *info,
+                                     const struct timespec *start, long time_ms, size_t bytes_max,
+                                     const layer_path_mark *resume,
+                                     layer_path_mark *marks, int *mark_count, int mark_cap) {
     memset(info, 0, sizeof(*info));
     info->layer = layer_1based;
     info->z = NAN;
@@ -548,10 +640,22 @@ static int gcode_layer_path_parse(FILE *file, int layer_1based,
     s.cap = points_cap < LAYER_PATH_COLLECT_MAX ? points_cap : LAYER_PATH_COLLECT_MAX;
     s.path_cap = paths_cap < LAYER_PATH_PATHS_MAX ? paths_cap : LAYER_PATH_PATHS_MAX;
     int target0 = layer_1based - 1;
+    const layer_path_mark *from = NULL;
+    if (resume && resume->offset >= 0 &&
+        (bytes_max == 0 || (unsigned long long)resume->offset <= (unsigned long long)bytes_max)) {
+        if (fseeko(file, (off_t)resume->offset, SEEK_SET) == 0) {
+            from = resume;
+            layer_path_restore(&s, from);
+        } else rewind(file);
+    }
     char line[LAYER_PATH_LINE_MAX];
-    size_t bytes = 0;
+    size_t bytes = from ? (size_t)from->offset : 0;
+    long long pos = from ? from->offset : 0;
+    int skipped = 0; /* a move was left out, so the motion state no longer fits a layer start */
     while (fgets(line, sizeof(line), file)) {
         size_t n = strlen(line);
+        long long line_at = pos;
+        pos += (long long)n;
         bytes += n;
         if (bytes_max && bytes > bytes_max) {
             if (s.seen_marker && s.current > target0) break;
@@ -564,7 +668,25 @@ static int gcode_layer_path_parse(FILE *file, int layer_1based,
         }
         int numbered = 0, kind = layer_path_marker(line, &numbered);
         if (kind) {
+            /* No mark for a ;LAYER:N line in ;LAYER_CHANGE mode, and none once a move was left out. */
+            int mark = !(kind == 2 && s.change_mode) && !skipped;
+            layer_path_mark shot;
+            memset(&shot, 0, sizeof(shot));
+            if (mark) {
+                shot.layer = 0;
+                shot.current = s.current;
+                shot.max_layer = s.max_layer;
+                shot.total_hint = s.total_hint;
+                shot.changes = s.changes;
+                shot.flags = layer_path_state_flags(&s);
+                shot.x = s.x;
+                shot.y = s.y;
+                shot.z = s.z;
+                shot.e = s.e;
+                shot.offset = line_at;
+            }
             layer_path_apply_marker(&s, kind, numbered, target0);
+            if (mark) layer_path_mark_add(marks, mark_count, mark_cap, s.current, &shot);
             continue;
         }
         const char *comment = line;
@@ -603,6 +725,7 @@ static int gcode_layer_path_parse(FILE *file, int layer_1based,
              * large file's early layers then cost a fraction of a full scan. Files numbered
              * by ;LAYER:N alone (Cura) can repeat a number, so they are still read to the end. */
             if (s.change_mode) break;
+            skipped = 1;
             continue;
         }
         layer_path_word_line(&s, line, target0);
