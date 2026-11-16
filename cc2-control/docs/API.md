@@ -236,6 +236,17 @@ Basename and case aliases are protected on
 both media. Unknown/stale active-job evidence refuses deletion. Existing storage,
 path traversal, symlink and hard-link restrictions remain; copying is still Idle-only.
 
+A print started from USB runs from an internal `CC2_USB_<hash>_<name>` copy. After each accepted
+USB start the oldest of these copies are removed so that the newest three remain, the one just
+started always among them. Then, while all copies together exceed 1 GiB, the oldest of the rest goes
+first; the one just started counts but is never removed, so it may stay alone above the limit with
+the protected copies. A copy is removed only where `POST /api/gcode-files/delete` would
+remove it (the same guard: never the active, paused or errored job, nothing while the printer
+state is stale or unknown, an upload is running or an Orca start is pending) and only when no
+queued job names it: as its own internal file, as the copy its start was given, or as the copy a
+queued USB job imports to. Symbolic links, hard-linked files, `.part` files and other names are
+never touched.
+
 `POST /api/gcode-files/upload` never overwrites a file. When it rejects an upload after the
 headers, for example with 409 because the name exists, it first reads the rest of the
 request body, so a browser receives the error instead of a reset connection.
@@ -263,6 +274,79 @@ printer's Canvas colour table with one `CANVAS_SET_COLOR_TABLE T= CHANNEL=` requ
 socket, as the touchscreen does. The print starts only after the printer acknowledges it. Otherwise
 the reply is 503 with `"error":"Cannot clear the Canvas colour table for the external feed"`, and
 nothing is started. Details are in `cc2-control/docs/GCODE-PROTOCOL.md`.
+
+## USB print starts
+
+Every `POST /api/gcode-files/print`, from internal memory as well as from USB, is checked on one start
+worker: the request is answered at once only when it is refused without reading the file (invalid,
+printer not idle, MQTT not ready); otherwise the leveling and Canvas tool check runs on the worker while
+CC2 Control keeps answering other requests, and the main loop repeats every check and sends the start
+afterwards. Only one start is prepared at a time (409 `Another print start is still being prepared`).
+While a file's start is prepared, `POST /api/gcode-files/delete` refuses that name with
+`file_delete_pending_print`. An internal file that changed during the check (size, inode or modification
+time) is not started (409 `The file changed while the start was prepared`).
+
+A `POST /api/gcode-files/print` from `usb` copies the file into internal memory as
+`CC2_USB_<hash>_<name>` and prints that copy. The copy needs free space for itself, and once it
+has replaced an earlier copy of the same name the 16 MiB storage reserve that uploads keep must
+remain (the earlier copy counts towards the reserve, not towards the room the copy is written to);
+when that room is missing, older `CC2_USB_` copies are removed right before the copy, once the checks
+before it passed, oldest first and only those the cleanup after a start may remove, but only when that
+gives enough room; otherwise nothing is removed and the start is refused before anything is written
+(`507`, `Insufficient free space for the USB copy and storage reserve`). An upload into internal memory
+(`POST /api/gcode-files/upload`, OrcaSlicer upload) makes room from old `CC2_USB_` copies the same way before it
+begins. The USB file must be the
+one that was scanned: if its size, inode or modification time differs, or fewer bytes were read
+than it holds, the copy is discarded (`507`, `The USB file changed while it was copied`). After
+`fsync` the copy is read back and compared with the bytes read from the stick (64-bit FNV-1a and
+length); a mismatch discards it (`507`, `The internal copy of the USB file failed verification`).
+Only a verified copy is renamed from its `.part` name, and only right before the start is sent, once the printer is confirmed idle: an earlier copy of the same name is never replaced under a print the touchscreen started meanwhile. An emergency stop or a client that leaves
+stops the scan before the copy after the current line, the copy and its read back after the current
+64 KiB block, and removes the `.part` file; an earlier copy with the same name is left as it was. A
+`CC2_USB_` `.part` file left behind when CC2 Control ended during a copy is removed when it starts and before
+every USB copy: a running copy holds a lock (`flock`) on its `.part` until it is renamed or removed, and the
+lock ends with the process, so a `.part` without a lock has no copy behind it, whatever its age.
+A start whose worker makes no progress for 15 s (a read the stick does not answer) is answered at once
+with 409 `{"accepted":false,"reason":"usb_unresponsive","error":"The USB stick does not respond; remove
+it, then start the print again"}`. The start stays busy until the worker returns from that read; then it
+is cleaned up without a second answer. A stick that never answers again keeps further starts refused
+until CC2 Control restarts.
+The copy runs on its worker thread at normal priority and without pauses. Every 8 MiB it writes the
+copy out and drops those pages of the source and the copy from the cache, so the copy does not pile up
+unwritten data in memory; the read back drops the copy's pages the same way, every 8 MiB and at the end. A
+USB start on a printer that is not linked or not idle is refused before the stick is read (503 `Printer
+MQTT is not ready`, 409 `Starting a file requires an idle printer`), and so is a start from internal memory
+on a linked printer that is not idle. Without a printer link a start from internal memory is checked as
+before, at once and in the same order (request, file, then printer).
+The page waits for the answer to a start at least 300 s, and for a file of known size 120 s plus 1 s
+per 2 MB (500 MB: 370 s), at most 20 minutes; it knows the size from the file list and from the queue's
+`size`. The rate is an assumption until the copy is measured on the printer. When the wait runs out the
+page says so and closes the request, which cancels the start.
+While a start reads a file, `POST /api/gcode-files/inspect` and `POST /api/gcode-files/metadata` for
+that same file are refused at once with 409 `{"reason":"start_reading","error":"A print start is reading
+this file right now; open it again once the start is answered"}` instead of reading it in parallel; a start
+that finds an inspection of its file still running waits for it.
+When the print dialog inspected the same file just before (`POST /api/gcode-files/inspect`, same
+device, inode, size, modification and change time), the start takes its leveling and Canvas tool
+decision from that cached inspection instead of reading the file again, so a refused start still
+copies nothing. The copy then scans the bytes it copies with the same line logic and must reach the
+same decision; if it does not, the copy is discarded (`507`, `The USB file changed while it was
+copied`). Without such an entry (another client, a restart, another file inspected since) the file is
+scanned before the copy, in one pass for leveling and tools when the start names Canvas trays.
+When the copy starts, CC2 Control notes the Canvas trays; after the copy it compares the trays the
+start's slot mapping names (status, type, name and colour). If one of them changed meanwhile, the copy
+is not printed (409 `The Canvas trays changed while the file was copied; start the print again`), and a
+queued USB job is dropped as a refused start. For a USB file the trays after the copy come from a
+report CC2 Control asks the printer for once the copy is done (method 2005); it waits up to 10 s for it
+without holding up other requests, and an emergency stop or a client that leaves ends the wait. When no
+such report comes in time, the start is refused (409 `The Canvas did not report its trays after the copy;
+check that the Canvas is connected, then start the print again`). When the Canvas had not reported when a
+start with a slot mapping began, CC2 Control asks for a report at once and keeps it as the trays at the start; the
+file is checked meanwhile, but nothing is copied before the report. Without one within 10 s the start is refused
+before the copy (409 `The Canvas did not report its trays when the start began; check that the Canvas is
+connected, then start the print again`). Both Canvas refusals carry `"reason":"canvas_unreported"`, so the page
+can keep the print dialog open to try again or change the mapping. Without a slot
+mapping the trays are not compared and nothing is waited for.
 
 ## Delete print-history entries
 
@@ -864,7 +948,7 @@ unless the `auto` policy is chosen.
   "delay","remove_done"},"active","next","items":[…]}`. Items are in queue order with `id`, `storage`, `path`,
   `mapping`, `side`, `leveling`, `timelapse`, `measure`, `nozzle`, `copies`, `done`, `estimated_seconds` and
   `filament_grams` (`null` when unknown), `added`, `state` (`pending`, `starting`, `printing` or `done`),
-  `last_result` (`""`, `stopped`, `not_started`, `auto_failed` or `auto_material`) and `present` (the file is in place).
+  `last_result` (`""`, `stopped`, `not_started`, `auto_failed` or `auto_material`) `present` (the file is in place) and `size` (the file's bytes, `null` when it is not there; the page waits for a start of the job as long as copying and checking that size may take).
   `next` is the first pending job whose file is present; `active` the job whose copy is starting or printing;
   `auto_in` the seconds until a pending automatic start, else `null`.
 - `POST /api/queue/add` takes the eight newline-separated fields of `/api/gcode-files/print` (storage,
@@ -878,7 +962,12 @@ unless the `auto` policy is chosen.
   session holds the printer (the refusals every print control shares: maintenance, the Canvas and filament
   tools, a camera cell, an application update, a managed connection, drying, the nozzle test); otherwise it
   answers exactly as `/api/gcode-files/print` would (202 accepted, or its 4xx/5xx). The job is saved as
-  `starting` before the request goes to the printer, so a restart in between still follows the copy.
+  `starting` before the request goes to the printer, so a restart in between still follows the copy. A job
+  is first checked (and a USB file copied) on the start worker, as from the print dialog: CC2 Control keeps
+  answering, the reply comes afterwards (the Queue page waits up to 300 s for it), and the job stays
+  `pending`, also in `print-queue.json`, until then; a restart meanwhile leaves it pending. A job removed or
+  another queued copy started meanwhile is not started (409). An automatic start copies the same way; if it is
+  then refused or cancelled, the job gets `last_result` `auto_failed`.
 - `POST /api/queue/abandon` (optionally the job id) gives up a `starting` copy the printer never ran: only
   while the printer is idle with fresh telemetry (409 otherwise, or when no start is waiting); the job goes
   back to `pending` with `last_result` `not_started`.
