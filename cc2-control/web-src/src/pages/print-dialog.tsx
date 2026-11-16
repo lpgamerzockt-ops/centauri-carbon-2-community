@@ -6,16 +6,20 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Select } from '@/components/ui/field'
 import { errText, notify, post, request, toast } from '@/lib/api'
+import { ask } from '@/lib/confirm'
+import { tooLargeForPrinter } from '@/lib/printer-file-limit'
 import { t, tpl } from '@/lib/i18n'
 import { canvasHex, canvasModel } from '@/lib/canvas'
 import { meshRoot } from '@/lib/mesh'
 import { nearestMeasure, nozzleName, type PlateLibrary, usable } from '@/lib/plates'
 import { openPage, printer } from '@/lib/state'
 import { EXTERNAL, findSpool, g, spoolGrams, spoolLabel, type SpoolLibrary } from '@/lib/spools'
+import { startTimeoutMs } from '@/lib/start-timeout'
 
 type Pending = {
   storage: string
   path: string
+  size: number | null // bytes, for how long the start may take
   tools: number[]
   // mm: the slicer's filament length for the tool, when the file states it.
   filaments: { tool: number; color: string; material: string; mm?: number }[]
@@ -74,7 +78,15 @@ let fileAnalysisPending = false
 
 // Opens the confirmation dialog; a print is never started without the operator confirming the mapping.
 export async function startFile(storage: string, path: string) {
+  return startFileOfSize(storage, path, null)
+}
+// The same with the file's size, so the page waits as long as the start of that file needs (start-timeout.ts).
+export async function startFileOfSize(storage: string, path: string, size: number | null) {
   if (pending.get().job || fileAnalysisPending) return
+  // From 2 GiB on the printer program cannot open the file: warn before anything is read or copied; the operator
+  // may still go on (CC2 Control does not block it).
+  if (tooLargeForPrinter(size) && !(await ask(`${t('files.not_printable_2gib')}\n\n${t('files.print_anyway')}`, true)))
+    return
   fileAnalysisPending = true
   notify(t('print.analysing_file'))
   try {
@@ -92,6 +104,7 @@ export async function startFile(storage: string, path: string) {
       job: {
         storage,
         path,
+        size: typeof size === 'number' ? size : null,
         tools,
         filaments: Array.isArray(inspection.filaments) ? inspection.filaments : [],
         meshAvailable: meshReadiness.availability,
@@ -108,7 +121,13 @@ export async function startFile(storage: string, path: string) {
     toast.set(s => ({ ...s, text: '' }))
   } catch (e) {
     pending.set({ job: null })
-    notify(tpl('print.cannot_prepare_print_error', { error: errText(e) }), 'error')
+    // A start of this same file is still reading it: the printer does not analyse it in parallel.
+    const reason = (e as { data?: { reason?: string } })?.data?.reason
+    const m =
+      reason === 'start_reading'
+        ? t('print.start_reading')
+        : tpl('print.cannot_prepare_print_error', { error: errText(e) })
+    notify(m, 'error')
   } finally {
     fileAnalysisPending = false
   }
@@ -291,7 +310,8 @@ const Form = ({ job }: { job: Pending }) => {
     try {
       const result = await post(
         '/api/gcode-files/print',
-        `${job.storage}\n${job.path}\n${mapping}\n${side}\n${calibrating ? 'calibrate' : 'saved'}\n${timelapse ? '1' : '0'}\n${measureId}\n${nozzleId}`
+        `${job.storage}\n${job.path}\n${mapping}\n${side}\n${calibrating ? 'calibrate' : 'saved'}\n${timelapse ? '1' : '0'}\n${measureId}\n${nozzleId}`,
+        startTimeoutMs(job.size)
       )
       const g = activeGeneration
       activeGeneration = 0
@@ -305,7 +325,16 @@ const Form = ({ job }: { job: Pending }) => {
         )
       )
     } catch (err) {
-      setNote(`${t('print.print_not_started')} ${errText(err)}`)
+      // The Canvas did not report its trays (before or after the copy): nothing was printed. The dialog stays open,
+      // so the operator can start again, choose other spools or cancel.
+      const reason = (err as { data?: { reason?: string } })?.data?.reason
+      setNote(
+        reason === 'canvas_unreported'
+          ? t('print.canvas_unreported')
+          : reason === 'usb_unresponsive'
+            ? t('print.usb_unresponsive')
+            : `${t('print.print_not_started')} ${errText(err)}`
+      )
       setBusy(false)
     }
   }
