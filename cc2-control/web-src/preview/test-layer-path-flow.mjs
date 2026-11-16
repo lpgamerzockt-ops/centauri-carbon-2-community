@@ -13,6 +13,13 @@ try {
   page.on('pageerror', e => errors.push(e.message))
   await page.addInitScript(() => localStorage.setItem('cc2-fixture-preferences', '{"language":"en"}'))
   await page.goto(demo.url + '#job')
+  // The status line always names the layer and its total; loading shows as a small mark, never as the text.
+  await page.evaluate(() => {
+    window.__statusLoadingText = 0
+    new MutationObserver(() => {
+      if (/Loading layer/.test(document.querySelector('[data-layer-status]')?.textContent || '')) window.__statusLoadingText++
+    }).observe(document.body, { subtree: true, childList: true, characterData: true })
+  })
   await page.evaluate(() => {
     const state = window.__CC2_PREVIEW
     Object.assign(state, { status: 2, filename: 'flow.gcode', current: '', excluded: [], layer: 0, totalLayers: 227, nozzleX: 60 })
@@ -362,6 +369,7 @@ try {
   assert.equal(behind.mapTop, steady.mapTop, 'the map does not move when the catch-up text appears')
   await page.setViewportSize({ width: 1440, height: 1000 })
 
+  assert.equal(await page.evaluate(() => window.__statusLoadingText), 0, 'the status line never turns into "Loading layer…"')
   assert.deepEqual(errors, [])
   console.log(
     'PASS: layer path flow with a one-scan backend: waiting for layer 1 while preparing, cold cache, layer 1 -> 2, current before previous, busy retry, rapid stepping, back to Live, nozzle updates without fetch, obsolete responses, close/reopen, scan limit reported, stale layer after a print start, catch-up text at phone width'

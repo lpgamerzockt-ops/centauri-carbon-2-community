@@ -19,9 +19,14 @@ const ticks = [0, 50, 100, 150, 200, 250]
 const STORAGE = 'internal'
 // Rapid manual stepping requests only the layer it settles on.
 const LAYER_SETTLE_MS = 350
-// A busy scan of a large file takes up to the backend's 20 s deadline.
-const LAYER_BUSY_RETRY_MS = 1500
-const LAYER_BUSY_RETRIES = 15
+// "Busy" means a scan runs or the service rests after one. The rest is at least 250 ms (LAYER_PATH_REST_MIN_MS in
+// the service), so the first retry comes after 300 ms and then backs off to 1.5 s, because a scan of a large file
+// runs up to the backend's 20 s deadline. 3 short waits plus 14 of 1.5 s give 23.1 s, more than the 22.5 s
+// (15 x 1.5 s) this page waited before.
+const LAYER_BUSY_RETRY_FIRST_MS = 300
+const LAYER_BUSY_RETRY_MAX_MS = 1500
+const LAYER_BUSY_RETRIES = 17
+const busyRetryDelay = (attempt: number) => Math.min(LAYER_BUSY_RETRY_MAX_MS, LAYER_BUSY_RETRY_FIRST_MS * 2 ** attempt)
 // Live never stays on "Loading layer…". After the backend's scan budget, show
 // the path we have or say that the answer did not arrive.
 const LAYER_LIVE_WAIT_MS = 20000
@@ -43,27 +48,33 @@ const layerPathLimit = (error: unknown) => {
 
 const pointsAttr = (path: LayerPathPolyline) => path.map(([x, y]) => `${x},${BED_SIZE - y}`).join(' ')
 
+// The number sits in the middle of the object on the Objects tab. On the layer path it would hide the lines, so it
+// goes beside the object: level with its middle, its right edge a little left of the leftmost outline point.
+const LAYER_BADGE_GAP_MM = 1.5
+
 function markerPoint(
   center: [number, number] | null,
   polygon: [number, number][] | null,
-  edge: boolean
+  beside: boolean
 ): [number, number] | null {
   if (!center) return null
-  if (!edge) return center
-  if (!polygon?.length) {
-    return [Math.min(BED_SIZE, center[0] + 14), Math.min(BED_SIZE, center[1] + 14)]
-  }
-  let best = polygon[0]
-  let score = Number.NEGATIVE_INFINITY
-  for (const p of polygon) {
-    const s = p[0] - center[0] + (p[1] - center[1])
-    if (s > score) {
-      score = s
-      best = p
-    }
-  }
-  return best
+  if (!beside) return center
+  const left = polygon?.length ? Math.min(...polygon.map(p => p[0])) : center[0] - 12
+  return [Math.max(0, left - LAYER_BADGE_GAP_MM), center[1]]
 }
+
+const pointInShape = (p: [number, number], shape: [number, number][]) => {
+  let inside = false
+  for (let i = 0, j = shape.length - 1; i < shape.length; j = i++) {
+    const [xi, yi] = shape[i]
+    const [xj, yj] = shape[j]
+    if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) inside = !inside
+  }
+  return inside
+}
+// A line belongs to an object when most of its points lie in the object's outline.
+const inAnyShape = (line: LayerPathPolyline, shapes: [number, number][][]) =>
+  line.length > 0 && shapes.some(shape => line.filter(p => pointInShape(p, shape)).length * 2 >= line.length)
 
 const formatZ = (z: number) => (Math.round(z * 100) / 100).toFixed(2)
 
@@ -94,7 +105,13 @@ function fadedChunks(paths: LayerPathPolyline[]) {
   return chunks
 }
 
-function LayerPolylines({ paths, kind }: { paths: LayerPathPolyline[]; kind: 'prev' | 'printed' | 'remain' }) {
+function LayerPolylines({
+  paths,
+  kind,
+}: {
+  paths: LayerPathPolyline[]
+  kind: 'prev' | 'printed' | 'remain' | 'skipped'
+}) {
   if (kind === 'printed') {
     const chunks = fadedChunks(paths)
     return (
@@ -123,7 +140,8 @@ function LayerPolylines({ paths, kind }: { paths: LayerPathPolyline[]; kind: 'pr
             class={cn(
               'cc2-layer-path',
               kind === 'prev' && 'cc2-layer-path-prev',
-              kind === 'remain' && 'cc2-layer-path-remain'
+              kind === 'remain' && 'cc2-layer-path-remain',
+              kind === 'skipped' && 'cc2-layer-path-skipped'
             )}
           />
         ) : null
@@ -234,7 +252,7 @@ export const ObjectBedMap = ({
             } catch (error) {
               if (ac.signal.aborted) return
               if (!layerPathBusy(error) || attempt >= LAYER_BUSY_RETRIES) throw error
-              await wait(LAYER_BUSY_RETRY_MS)
+              await wait(busyRetryDelay(attempt))
             }
           }
           if (ac.signal.aborted) return
@@ -338,7 +356,7 @@ export const ObjectBedMap = ({
             if (layerPathBusy(error) && attempt < LAYER_BUSY_RETRIES) {
               // A busy reply has finished. Ask for the printer's layer, not the one it left.
               if (printerLayerRef.current !== target) break
-              await wait(LAYER_BUSY_RETRY_MS)
+              await wait(busyRetryDelay(attempt))
               continue
             }
             failed = layerPathLimit(error) ? 'limit' : 'missing'
@@ -406,7 +424,14 @@ export const ObjectBedMap = ({
       : printerLayer > 0 && viewLayer > printerLayer
         ? 'remaining'
         : 'split'
-  const { printed, remaining } = splitLayerPaths(path?.paths || [], nozzleOnBed ? nozzle : null, splitMode)
+  // The path of an excluded object is not printed: draw it pale instead of as part of the path.
+  const excludedShapes = o.entries
+    .filter(e => e.polygon && o.excluded.includes(e.id))
+    .map(e => e.polygon as [number, number][])
+  const skipped: LayerPathPolyline[] = []
+  const active: LayerPathPolyline[] = []
+  for (const line of path?.paths || []) (inAnyShape(line, excludedShapes) ? skipped : active).push(line)
+  const { printed, remaining } = splitLayerPaths(active, nozzleOnBed ? nozzle : null, splitMode)
   const zValue = path?.z ?? (liveFollow && typeof nozzleRaw?.z === 'number' ? nozzleRaw.z : null)
   const waitingFirstLayer = layerTab && liveFollow && Boolean(file) && printerLayer < 1
   // Live keeps drawing the last path. When that path is not the printer's layer,
@@ -441,7 +466,7 @@ export const ObjectBedMap = ({
           ? t(unavailable === 'limit' ? 'job.bed_map_layer_limit' : 'job.bed_map_layer_unavailable')
           : behind && path
             ? tpl('job.bed_map_layer_behind', { n: path.layer, m: printerLayer })
-            : showLoading && liveFollow
+            : showLoading && !(shownLayer >= 1 && totalLayers > 0)
               ? t('job.bed_map_loading_layer')
               : layerTab && timedOut && !path
                 ? t('job.bed_map_layer_timeout')
@@ -494,7 +519,7 @@ export const ObjectBedMap = ({
             <Button
               class="h-11 w-11 min-h-11 p-0"
               aria-label={t('job.bed_map_previous_layer')}
-              disabled={viewLayer <= 1 || !file}
+              disabled={!layerTab || viewLayer <= 1 || !file}
               onClick={() => stepLayer(-1)}
             >
               <ChevronLeft size={18} />
@@ -502,17 +527,17 @@ export const ObjectBedMap = ({
             <Button
               class="h-11 w-11 min-h-11 p-0"
               aria-label={t('job.bed_map_next_layer')}
-              disabled={!file || (totalLayers > 0 && viewLayer >= totalLayers)}
+              disabled={!layerTab || !file || (totalLayers > 0 && viewLayer >= totalLayers)}
               onClick={() => stepLayer(1)}
             >
               <ChevronRight size={18} />
             </Button>
             <Button
               class="h-11 min-h-11 px-3.5 whitespace-nowrap"
-              variant={liveFollow ? 'primary' : 'default'}
-              aria-pressed={liveFollow}
+              variant={layerTab && liveFollow ? 'primary' : 'default'}
+              aria-pressed={layerTab && liveFollow}
               data-layer-live
-              disabled={!file}
+              disabled={!layerTab || !file}
               onClick={followLive}
             >
               {t('job.bed_map_live')}
@@ -523,8 +548,10 @@ export const ObjectBedMap = ({
             class="min-h-8 min-w-0 basis-full text-xs text-muted cc2-md:min-h-4 cc2-md:flex-1 cc2-md:basis-0 cc2-md:whitespace-nowrap"
             data-layer-status
             role="status"
+            aria-busy={mapLoading ? 'true' : undefined}
           >
             {status}
+            {mapLoading && <span class="cc2-layer-loading-dot" data-layer-loading aria-hidden="true" />}
           </p>
         </div>
       )}
@@ -556,14 +583,23 @@ export const ObjectBedMap = ({
                     e =>
                       e.polygon &&
                       onBed(e.center) && (
+                        // biome-ignore lint/a11y/noStaticElementInteractions: the object area is a mouse shortcut; the numbered button and the list are the keyboard path
                         <polygon
                           key={e.id}
                           data-bed-outline-id={e.id}
-                          data-selected={e.id === o.selected ? 'true' : undefined}
-                          data-current={e.id === o.current ? 'true' : undefined}
-                          data-excluded={o.excluded.includes(e.id) ? 'true' : undefined}
+                          data-selected={!layerTab && e.id === o.selected ? 'true' : undefined}
+                          data-current={!layerTab && e.id === o.current ? 'true' : undefined}
+                          data-excluded={!layerTab && o.excluded.includes(e.id) ? 'true' : undefined}
                           points={e.polygon.map(([x, y]) => `${x},${BED_SIZE - y}`).join(' ')}
-                          class="cc2-object-map-outline"
+                          class={cn(
+                            'cc2-object-map-outline',
+                            live && !layerTab && !o.excluded.includes(e.id) && 'cc2-object-map-outline-pick'
+                          )}
+                          onClick={
+                            live && !layerTab && !o.excluded.includes(e.id)
+                              ? () => objects.set({ selected: e.id })
+                              : undefined
+                          }
                         />
                       )
                   )}
@@ -586,6 +622,7 @@ export const ObjectBedMap = ({
                     {layerTab && !unavailable && prevPath && <LayerPolylines paths={prevPath.paths} kind="prev" />}
                     {layerTab && !unavailable && path && (
                       <>
+                        <LayerPolylines paths={skipped} kind="skipped" />
                         <LayerPolylines paths={remaining} kind="remain" />
                         <LayerPolylines paths={printed} kind="printed" />
                       </>
@@ -604,9 +641,9 @@ export const ObjectBedMap = ({
                       type="button"
                       key={e.id}
                       data-bed-object-id={e.id}
-                      data-current={current ? 'true' : undefined}
-                      data-selected={chosen ? 'true' : undefined}
-                      data-excluded={excluded ? 'true' : undefined}
+                      data-current={!layerTab && current ? 'true' : undefined}
+                      data-selected={!layerTab && chosen ? 'true' : undefined}
+                      data-excluded={!layerTab && excluded ? 'true' : undefined}
                       data-layer-badge={layerTab ? 'true' : undefined}
                       aria-label={`${i + 1}. ${e.label} · X ${e.center[0].toFixed(1)} / Y ${e.center[1].toFixed(1)} mm${current ? ` · ${t('job.current_object')}` : ''}${excluded ? ` · ${t('job.excluded')}` : ''}`}
                       aria-pressed={chosen}
@@ -635,7 +672,7 @@ export const ObjectBedMap = ({
                     }}
                   />
                 )}
-                {mapLoading && (
+                {showLoading && (
                   <div class="cc2-layer-path-status" role="status">
                     {t('job.bed_map_loading_layer')}
                   </div>
@@ -645,22 +682,32 @@ export const ObjectBedMap = ({
             <p class="mt-2 text-center text-xs text-muted">{t('job.bed_map_front')}</p>
           </div>
           <div class="cc2-object-map-legend mt-2 flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs">
-            <span class="flex items-center gap-1.5">
-              <i class="h-2 w-2 rounded-full bg-cyan" />
-              {t('job.bed_map_selected')}
-            </span>
-            <span class="flex items-center gap-1.5">
-              <i class="h-2 w-2 rounded-full bg-amber" />
-              {t('job.current_object')}
-            </span>
-            <span class="flex items-center gap-1.5">
-              <i class="h-2 w-2 rounded-full bg-red" />
-              {t('job.excluded')}
-            </span>
+            {!layerTab && (
+              <>
+                <span class="flex items-center gap-1.5">
+                  <i class="h-2 w-2 rounded-full bg-cyan" />
+                  {t('job.bed_map_selected')}
+                </span>
+                <span class="flex items-center gap-1.5">
+                  <i class="h-2 w-2 rounded-full bg-amber" />
+                  {t('job.current_object')}
+                </span>
+                <span class="flex items-center gap-1.5">
+                  <i class="h-2 w-2 rounded-full bg-red" />
+                  {t('job.excluded')}
+                </span>
+              </>
+            )}
             {onClose && (
               <span class="flex items-center gap-1.5">
                 <i class="cc2-layer-path-swatch" />
                 {t('job.bed_map_layer_legend')}
+              </span>
+            )}
+            {layerTab && (
+              <span class="flex items-center gap-1.5">
+                <i class="cc2-layer-nozzle-swatch" />
+                {t('job.bed_map_nozzle')}
               </span>
             )}
           </div>
