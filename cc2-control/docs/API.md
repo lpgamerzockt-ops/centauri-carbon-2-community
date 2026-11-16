@@ -219,6 +219,50 @@ the previous page stops on its next existing printer-state poll. Brief overlap d
 A page streaming live view stops when `camera_viewer` names another page, and offers to take the camera back. The
 camera service itself is unchanged: other clients connected directly to port 8080 are not affected.
 
+## A new print starts clean
+
+`GET /api/printer` reports `print.current_layer`, `print.duration`, `print.total_duration`, `print.remaining` and `machine.progress` of the
+running print only (for `print.remaining`, the estimate from the file stands in while the printer has not reported one, see `remaining_source`). When a new print begins they go back to 0 until the printer reports a new value, also when
+it prints the same file as before (before, the layer of the previous print was still shown right after a start).
+MQTT tells a new print by its job uuid (`print.uuid`) differing from the last non-empty one; the printer's direct
+status stream (`print.native`, UDS) tells it by `print_stats.state` going from `standby`, `complete`, `cancelled` or
+`error` to `printing`. A pause and resume, a reconnection in the middle of a print and the first value after the
+service starts do not reset anything. The direct stream's filament use is dropped the same way.
+
+## Layer path
+
+`GET /api/gcode-files/layer-path?storage=internal&file=<name>&layer=<n>` returns the thinned extrusion path of one
+layer. Answers: 200 with the path; 400 for a malformed request (`Invalid layer`, `Invalid protected G-code path`);
+404 for a file that is not there or a layer outside it; 413 when the scan reached its time or size limit
+(`Layer path scan limit reached`, answered at once for the same or a higher layer of that file for 300 s) or the
+path is too large; 503 `Layer path busy; retry shortly` while another scan runs or rests after the last one (the
+page retries it); 500 for a read error.
+
+While a print runs, a request for **the file of that print** (`storage=internal` and the printer's file name) is
+refused with **409 Conflict** before any G-code is read when it cannot belong to the print:
+
+- `Layer is beyond the running print`: the layer is above the print's layer count (the count the printer reports,
+  else the one found in the G-code file; no count known, no check).
+- `The running print has not reached that layer`: the layer is above 1 and `print.current_layer` of
+  `GET /api/printer` (the direct stream's value when it has one) is still below 1. A new print resets that value,
+  so a layer left over from the print before (seen: layer 193, a 20 s scan of 78.7 MB right after a start) is not read.
+
+A print counts as running while the printer is fresh (last message within 15 s), `machine.status` is 2 and the
+state is `printing` or `paused`. Requests for any other file, for the USB storage, and every request while no
+print runs (browsing by hand) are answered as before. The 409 is not retried by the page, unlike the 503.
+
+`GET /api/health` counts this work, in memory only (the counters start at 0 with the service and hold no file
+names, paths or other private data):
+
+| Member | Meaning |
+|---|---|
+| `layer_path_scans` | Scans the worker ran, including those that ended in 404 or 413. An answer from the remembered layer, or a refusal before reading, is no scan. |
+| `layer_path_rejected` | Requests refused with 409 as not fitting the running print. |
+| `layer_path_busy` | 503 `Layer path busy` answers (another scan running, the pause after the last one, or the scan worker could not be started). |
+| `layer_path_bytes_read` | Bytes the scans read from the files, counted from where each scan started (a remembered layer start is skipped, not read). |
+| `layer_path_longest_ms` | The longest scan, in milliseconds, from its start to the end of reading. |
+| `layer_path_last_ms` | The last scan, in milliseconds. |
+
 ## G-code file list and uploads
 
 `GET /api/gcode-files` lists each storage (`internal`, `usb`) as
