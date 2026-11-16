@@ -1,7 +1,6 @@
-import { ChevronLeft, ChevronRight, X } from 'lucide-preact'
+import { ChevronLeft, ChevronRight } from 'lucide-preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { t, tpl } from '@/lib/i18n'
 import {
   cachedLayerPath,
@@ -34,7 +33,7 @@ const LAYER_LIVE_WAIT_MS = 20000
 // name the lag only when it lasts or spans more than one layer.
 const LAYER_BEHIND_SHOW_MS = 3000
 // A new print reports the previous job's layer until its first layer change, which comes only after heating,
-// homing and probing (seen: layer 193 right after a start made Live scan the whole 75 MB file at the worst
+// homing and probing (seen: layer 193 right after a start made Live scan the whole 78.7 MB file at the worst
 // moment). A stale value never changes. So while a print is young, Live follows a layer only when it climbs
 // from the start (at most one above the last followed layer) or is seen stepping up by one; a jump keeps the
 // last layer that fitted. A layer above the job's layer count never counts.
@@ -153,11 +152,15 @@ function LayerPolylines({
 // Map prototype: Nick Plateringen-Paul. Single-view refinement: DamiBFryta.
 // Both sizes read the same model; selection never changes the original G-code ID.
 export const ObjectBedMap = ({
-  onClose,
+  embedded,
+  idle,
   onExclude,
   live,
 }: {
-  onClose?: () => void
+  /** The large map with its tabs shown on the page itself, without a dialog. */
+  embedded?: boolean
+  /** No print: the tabs are greyed out and Objects stays selected. */
+  idle?: boolean
   onExclude: () => void
   live: boolean
 }) => {
@@ -192,7 +195,11 @@ export const ObjectBedMap = ({
   if (printerLayer > 0 && young && printerLayer > climbed.current.max + 1 && !steppedUp)
     printerLayer = climbed.current.max
   if (printerLayer > climbed.current.max) climbed.current.max = printerLayer
-  const [tab, setTab] = useState<'objects' | 'layer'>('objects')
+  const [tabChoice, setTab] = useState<'objects' | 'layer'>('objects')
+  const tab = idle ? 'objects' : tabChoice
+  useEffect(() => {
+    if (idle) setTab('objects')
+  }, [idle])
   const [liveFollow, setLiveFollow] = useState(true)
   const [manualLayer, setManualLayer] = useState(1)
   const [path, setPath] = useState<LayerPath | null>(null)
@@ -200,6 +207,15 @@ export const ObjectBedMap = ({
   const [loading, setLoading] = useState(false)
   const [timedOut, setTimedOut] = useState(false)
   const [unavailable, setUnavailable] = useState<false | 'limit' | 'missing'>(false)
+  // The layer path loads only while its tab is open; leaving the tab drops what was loaded, so the next visit starts clean.
+  useEffect(() => {
+    if (tab === 'layer') return
+    setPath(null)
+    setPrevPath(null)
+    setLoading(false)
+    setTimedOut(false)
+    setUnavailable(false)
+  }, [tab])
   const viewLayer = liveFollow ? printerLayer : manualLayer
   const printerLayerRef = useRef(printerLayer)
   printerLayerRef.current = printerLayer
@@ -209,7 +225,7 @@ export const ObjectBedMap = ({
   if (file && path?.total_layers) knownTotal.current = { file, total: path.total_layers }
   const totalLayers =
     path?.total_layers || printerTotal || (knownTotal.current?.file === file ? knownTotal.current.total : 0)
-  const expanded = Boolean(onClose)
+  const expanded = Boolean(embedded)
   const layerTab = expanded && tab === 'layer'
   const nozzleRaw = printerState.data?.motion
   const nozzle: [number, number] | null =
@@ -454,68 +470,65 @@ export const ObjectBedMap = ({
   const shownZ = stale ? null : zValue
   const mapLoading = layerTab && loading && !timedOut
   // The Objects tab shows every layer's outline, so it names only the layer being printed.
-  const status = !onClose
+  const status = !expanded
     ? ''
-    : !layerTab
-      ? printerLayer >= 1 && printerTotal > 0
-        ? tpl('job.bed_map_printing_layer', { n: printerLayer, total: printerTotal })
-        : ''
-      : waitingFirstLayer
-        ? t('job.bed_map_waiting_first_layer')
-        : layerTab && unavailable
-          ? t(unavailable === 'limit' ? 'job.bed_map_layer_limit' : 'job.bed_map_layer_unavailable')
-          : behind && path
-            ? tpl('job.bed_map_layer_behind', { n: path.layer, m: printerLayer })
-            : showLoading && !(shownLayer >= 1 && totalLayers > 0)
-              ? t('job.bed_map_loading_layer')
-              : layerTab && timedOut && !path
-                ? t('job.bed_map_layer_timeout')
-                : shownLayer >= 1 && totalLayers > 0
-                  ? tpl('job.bed_map_layer_status', {
-                      n: shownLayer,
-                      total: totalLayers,
-                      z: shownZ != null ? formatZ(shownZ) : '…',
-                    })
-                  : layerTab
-                    ? t('job.bed_map_layer_unavailable')
-                    : ''
+    : idle
+      ? t('job.no_print')
+      : !layerTab
+        ? printerLayer >= 1 && printerTotal > 0
+          ? tpl('job.bed_map_printing_layer', { n: printerLayer, total: printerTotal })
+          : ''
+        : waitingFirstLayer
+          ? t('job.bed_map_waiting_first_layer')
+          : layerTab && unavailable
+            ? t(unavailable === 'limit' ? 'job.bed_map_layer_limit' : 'job.bed_map_layer_unavailable')
+            : behind && path
+              ? tpl('job.bed_map_layer_behind', { n: path.layer, m: printerLayer })
+              : showLoading && !(shownLayer >= 1 && totalLayers > 0)
+                ? t('job.bed_map_loading_layer')
+                : layerTab && timedOut && !path
+                  ? t('job.bed_map_layer_timeout')
+                  : shownLayer >= 1 && totalLayers > 0
+                    ? tpl('job.bed_map_layer_status', {
+                        n: shownLayer,
+                        total: totalLayers,
+                        z: shownZ != null ? formatZ(shownZ) : '…',
+                      })
+                    : layerTab
+                      ? t('job.bed_map_layer_unavailable')
+                      : ''
 
   const content = (
     <div
-      class={cn('cc2-object-map', onClose && 'cc2-object-map-expanded')}
-      data-bed-map-tab={onClose ? tab : undefined}
+      class={cn('cc2-object-map', expanded && 'cc2-object-map-expanded', embedded && 'cc2-object-map-embedded')}
+      data-bed-map-tab={expanded ? tab : undefined}
     >
-      {onClose && (
-        <div class="mb-3 flex items-center justify-between gap-3 border-b border-edge pb-3">
-          <DialogTitle>{t('job.bed_map')}</DialogTitle>
-          <Button onClick={onClose} aria-label={t('job.bed_map_close')}>
-            <X size={18} />
-          </Button>
-        </div>
-      )}
       <p class="mb-3 text-xs text-muted">{t('job.bed_map_hint')}</p>
-      {onClose && (
+      {expanded && (
         <div class="mb-3 flex flex-wrap items-center gap-2">
+          {/* The tabs and Live always use the weight of a selected button: otherwise selecting one makes it wider and moves the controls beside it. */}
           <fieldset class="m-0 flex h-11 min-w-0 overflow-hidden rounded-md border border-edge p-0">
             <legend class="sr-only">{t('job.bed_map_view')}</legend>
             <Button
-              class="h-11 min-h-11 rounded-none border-0 px-3.5 whitespace-nowrap"
+              class="h-11 min-h-11 rounded-none border-0 px-3.5 font-semibold whitespace-nowrap"
               variant={tab === 'objects' ? 'primary' : 'default'}
               aria-pressed={tab === 'objects'}
+              disabled={idle}
               onClick={() => setTab('objects')}
             >
               {t('job.bed_map_objects')}
             </Button>
             <Button
-              class="h-11 min-h-11 rounded-none border-0 border-l border-edge px-3.5 whitespace-nowrap"
+              class="h-11 min-h-11 rounded-none border-0 border-l border-edge px-3.5 font-semibold whitespace-nowrap"
               variant={tab === 'layer' ? 'primary' : 'default'}
               aria-pressed={tab === 'layer'}
+              disabled={idle}
               onClick={openLayer}
             >
               {t('job.bed_map_layer_path')}
             </Button>
           </fieldset>
-          <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             <Button
               class="h-11 w-11 min-h-11 p-0"
               aria-label={t('job.bed_map_previous_layer')}
@@ -533,7 +546,7 @@ export const ObjectBedMap = ({
               <ChevronRight size={18} />
             </Button>
             <Button
-              class="h-11 min-h-11 px-3.5 whitespace-nowrap"
+              class="h-11 min-h-11 px-3.5 font-semibold whitespace-nowrap"
               variant={layerTab && liveFollow ? 'primary' : 'default'}
               aria-pressed={layerTab && liveFollow}
               data-layer-live
@@ -558,11 +571,41 @@ export const ObjectBedMap = ({
       <div class="cc2-object-map-layout grid min-w-0 gap-3.5 cc2-md:grid-cols-2">
         <div class="min-w-0">
           <div class="cc2-object-map-frame">
-            <div class="mb-2 flex justify-between text-xs text-muted">
-              <span>
+            <div class="mb-2 flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5 text-xs text-muted">
+              <span class="order-1 shrink-0">
                 {BED_SIZE} × {BED_SIZE} mm
               </span>
-              <span>Y ↑ · X →</span>
+              <div class="cc2-object-map-legend order-3 flex min-h-9 basis-full flex-wrap content-start justify-center gap-x-4 gap-y-1 cc2-sm:order-2 cc2-sm:min-h-0 cc2-sm:flex-1 cc2-sm:basis-auto">
+                {!layerTab && (
+                  <>
+                    <span class="flex items-center gap-1.5">
+                      <i class="h-2 w-2 rounded-full bg-cyan" />
+                      {t('job.bed_map_selected')}
+                    </span>
+                    <span class="flex items-center gap-1.5">
+                      <i class="h-2 w-2 rounded-full bg-amber" />
+                      {t('job.current_object')}
+                    </span>
+                    <span class="flex items-center gap-1.5">
+                      <i class="h-2 w-2 rounded-full bg-red" />
+                      {t('job.excluded')}
+                    </span>
+                  </>
+                )}
+                {expanded && (
+                  <span class="flex items-center gap-1.5">
+                    <i class="cc2-layer-path-swatch" />
+                    {t('job.bed_map_layer_legend')}
+                  </span>
+                )}
+                {layerTab && (
+                  <span class="flex items-center gap-1.5">
+                    <i class="cc2-layer-nozzle-swatch" />
+                    {t('job.bed_map_nozzle')}
+                  </span>
+                )}
+              </div>
+              <span class="order-2 shrink-0 cc2-sm:order-3">Y ↑ · X →</span>
             </div>
             <div class="cc2-object-map-plate">
               <div class="cc2-object-map-surface" data-bed-map aria-busy={mapLoading ? 'true' : undefined}>
@@ -681,41 +724,15 @@ export const ObjectBedMap = ({
             </div>
             <p class="mt-2 text-center text-xs text-muted">{t('job.bed_map_front')}</p>
           </div>
-          <div class="cc2-object-map-legend mt-2 flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs">
-            {!layerTab && (
-              <>
-                <span class="flex items-center gap-1.5">
-                  <i class="h-2 w-2 rounded-full bg-cyan" />
-                  {t('job.bed_map_selected')}
-                </span>
-                <span class="flex items-center gap-1.5">
-                  <i class="h-2 w-2 rounded-full bg-amber" />
-                  {t('job.current_object')}
-                </span>
-                <span class="flex items-center gap-1.5">
-                  <i class="h-2 w-2 rounded-full bg-red" />
-                  {t('job.excluded')}
-                </span>
-              </>
-            )}
-            {onClose && (
-              <span class="flex items-center gap-1.5">
-                <i class="cc2-layer-path-swatch" />
-                {t('job.bed_map_layer_legend')}
-              </span>
-            )}
-            {layerTab && (
-              <span class="flex items-center gap-1.5">
-                <i class="cc2-layer-nozzle-swatch" />
-                {t('job.bed_map_nozzle')}
-              </span>
-            )}
-          </div>
           {missing > 0 && <p class="mt-3 text-xs text-muted">{tpl('job.bed_map_missing', { n: missing })}</p>}
         </div>
         <div class="flex min-w-0 flex-col">
           <p class="mb-2 text-xs text-muted">{t('job.object_position_order')}</p>
-          {onClose && layerTab && <p class="mb-2 text-xs text-muted">{t('job.bed_map_layer_behind_hint')}</p>}
+          {expanded && layerTab && behind && (
+            <p class="mb-2 text-xs text-muted" data-layer-behind-hint>
+              {t('job.bed_map_layer_behind_hint')}
+            </p>
+          )}
           <div class="cc2-object-map-list grid content-start gap-2 overflow-y-auto p-1">
             {o.entries.length === 0 ? (
               <div class="text-muted" role="status">
@@ -796,11 +813,5 @@ export const ObjectBedMap = ({
       </div>
     </div>
   )
-  return onClose ? (
-    <Dialog onClose={onClose} width={1200} class="max-w-[calc(100vw-2rem)]" label={t('job.bed_map')} sheet>
-      {content}
-    </Dialog>
-  ) : (
-    <section aria-label={t('job.bed_map')}>{content}</section>
-  )
+  return <section aria-label={t('job.bed_map')}>{content}</section>
 }

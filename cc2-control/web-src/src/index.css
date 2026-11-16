@@ -294,10 +294,6 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
 .cc2-page-content { min-width: 0; }
 @media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
   .cc2-page-content { max-width: 1440px; margin-inline: auto; }
-  .cc2-job-primary { align-items: stretch; }
-  .cc2-job-primary .cc2-camera-frame { min-height: 0; height: 240px; }
-  .cc2-job-primary > section:last-child { gap: 0; }
-  .cc2-job-primary .cc2-job-stats { margin-bottom: 12px; }
 }
 
 @media (hover: hover) and (pointer: fine) and (min-width: 901px) and (min-height: 501px) {
@@ -392,7 +388,8 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   opacity: .6;
 }
 
-/* A single physical bed view; all drawing stays in the browser and has no animation. */
+/* A single physical bed view; all drawing stays in the browser and stays still but for the loading dot. */
+.cc2-camera-frame.cc2-camera-bare { height: 100%; min-height: 0; }
 .cc2-object-map-frame { max-width: 480px; margin-inline: auto; }
 .cc2-object-map-plate {
   border: 1px solid var(--edge);
@@ -457,8 +454,8 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   transform: translate(-100%, 50%);
   border-width: 1px;
   border-radius: 5px;
-  background: #0f141a;
-  color: #f1f5f9;
+  background: var(--well);
+  color: var(--well-fg);
   font-size: 10px;
   opacity: 1;
   box-shadow: none;
@@ -474,6 +471,7 @@ input[type=range], input[type=checkbox], input[type=radio], progress { accent-co
   max-width: min(680px, calc(100vh - 22rem));
 }
 .cc2-object-map-expanded .cc2-object-map-plate { padding: 14px; }
+.cc2-object-map-embedded .cc2-object-map-frame { max-width: min(760px, 100%); }
 .cc2-object-map-expanded .cc2-object-map-list { max-height: min(480px, calc(100vh - 22rem)); }
 .cc2-object-map-expanded[data-bed-map-tab="layer"] .cc2-object-map-outline { fill: none; stroke-width: .6; }
 @container page (min-width: 900px) {

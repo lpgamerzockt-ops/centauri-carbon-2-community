@@ -106,16 +106,19 @@ try {
       n
     )
   const waitLog = entry => page.waitForFunction(e => window.__CC2_PREVIEW.scan.log.includes(e), entry)
-  const dialog = page.getByRole('dialog')
+  // The bed map is on the Job page itself: one card with the Objects and Layer path tabs.
+  const dialog = page.locator('section:has(.cc2-job-bar)')
   const unavailable = () => dialog.getByText('Layer path not available', { exact: true }).count()
-  const open = page.getByRole('button', { name: 'Expand bed map', exact: true })
   const openLayerTab = async () => {
-    await open.waitFor()
-    await page.waitForFunction(
-      () => !Array.from(document.querySelectorAll('button')).find(e => e.textContent.trim() === 'Expand bed map')?.disabled
-    )
-    await open.click()
-    await dialog.getByRole('button', { name: 'Layer path', exact: true }).click()
+    const tab = dialog.getByRole('button', { name: 'Layer path', exact: true })
+    await tab.waitFor()
+    await page.waitForFunction(() => !Array.from(document.querySelectorAll('fieldset button')).find(b => b.textContent.trim() === 'Layer path')?.disabled)
+    await tab.click()
+  }
+  // Leaving the Layer path tab drops the loaded path and aborts what is pending, like closing the old dialog did.
+  const closeLayerTab = async () => {
+    await dialog.getByRole('button', { name: 'Objects', exact: true }).click()
+    await page.waitForFunction(() => document.querySelector('[data-bed-map-tab]')?.getAttribute('data-bed-map-tab') === 'objects')
   }
 
   // Preparing (layer 0): Live waits for layer 1 instead of failing, stepping away
@@ -221,14 +224,13 @@ try {
   assert.match(await dialog.locator('[data-layer-status]').innerText(), /Layer 31 \/ 227/, 'an obsolete response stays off screen')
   assert.equal(await unavailable(), 0)
 
-  // Closing and reopening the dialog while a request is pending.
+  // Leaving and reopening the Layer path tab while a request is pending.
   await clearLog()
   await setScan({ durations: { 40: 1500 } })
   await dialog.getByRole('button', { name: 'Live', exact: true }).click()
   await set({ layer: 40 })
   await waitLog('40:200')
-  await dialog.getByRole('button', { name: 'Close bed map', exact: true }).click()
-  await page.waitForFunction(() => document.querySelectorAll('[role=dialog]').length === 0)
+  await closeLayerTab()
   await openLayerTab()
   await waitLayer(40)
   assert.equal(await unavailable(), 0, 'reopening during a pending scan waits for it instead of failing')
@@ -251,7 +253,9 @@ try {
     return drawn && status.includes('Layer 60 shown · printer at 63, loading…')
   })
   assert.equal(await dialog.getByText('Loading layer…', { exact: true }).count(), 0, 'loading does not cover the path that already arrived')
+  assert.equal(await dialog.locator('[data-layer-behind-hint]').count(), 1, 'the hint about the kept path shows while the path is behind')
   await waitLayer(63)
+  assert.equal(await dialog.locator('[data-layer-behind-hint]').count(), 0, 'and goes once the path has caught up')
 
   const jumped = await log()
   assert.ok(jumped.includes('60:200') && jumped.includes('63:200'), `finished the slow layer, then the newest: ${jumped}`)
@@ -269,12 +273,12 @@ try {
   const brief = await dialog.locator('[data-layer-status]').innerText()
   assert.match(brief, /^Layer 63 \/ 227/, `a short one-layer lag keeps the plain status: ${brief}`)
   assert.equal(await dialog.getByText('printer at', { exact: false }).count(), 0, 'a short one-layer lag is not named')
+  assert.equal(await dialog.locator('[data-layer-behind-hint]').count(), 0, 'and shows no hint')
   await waitLayer(64)
 
   // No path yet, and the scan outlasts the stated 20 s budget: say so, then show the path when it arrives.
-  // Close first so the next open starts with an empty path. A new filename would close the map by itself.
-  await dialog.getByRole('button', { name: 'Close bed map', exact: true }).click()
-  await page.waitForFunction(() => document.querySelectorAll('[role=dialog]').length === 0)
+  // Close first so the next open starts with an empty path. 
+  await closeLayerTab()
   await clearLog()
   const polls = await page.evaluate(() => window.__CC2_PREVIEW.printerPolls || 0)
   await setScan({ durations: { 70: 22000 } })
@@ -315,8 +319,7 @@ try {
   await clearLog()
   // First a layer above the new job's layer count (1000 from a long previous print, the new one has 193).
   await set({ filename: 'restart.gcode', totalLayers: 193, layer: 1000, duration: 600 })
-  // A new job closes the bed map; open it again on the layer path.
-  await page.waitForFunction(() => !document.querySelector('[role="dialog"]'))
+  // A new job keeps the tab open and follows the new file.
   await openLayerTab()
   await page.waitForTimeout(2500)
   assert.ok(!(await log()).some(e => e.startsWith('1000:')), `a layer above the layer count is not scanned: ${await log()}`)
@@ -342,7 +345,6 @@ try {
   await set({ layer: 170, duration: 400 })
   await waitLog('170:200')
   await set({ filename: 'flow.gcode', totalLayers: 227, layer: 51, duration: 600 })
-  await page.waitForFunction(() => !document.querySelector('[role="dialog"]'))
   await openLayerTab()
   await waitLayer(51)
 
@@ -357,7 +359,7 @@ try {
       return {
         text: status.textContent,
         fits: status.scrollWidth <= status.clientWidth && status.getBoundingClientRect().right <= document.documentElement.clientWidth,
-        mapTop: Math.round(document.querySelector('[role="dialog"] .cc2-object-map-frame').getBoundingClientRect().top),
+        mapTop: Math.round(document.querySelector('.cc2-object-map-frame').getBoundingClientRect().top),
       }
     })
   const steady = await phone()

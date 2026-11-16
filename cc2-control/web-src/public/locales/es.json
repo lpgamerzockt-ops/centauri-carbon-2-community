@@ -1148,7 +1148,6 @@
   "job.bed_map_selected": "Seleccionado",
   "job.bed_map_missing": "{n} objetos no tienen una posición válida en la placa. Selecciónalos en la lista.",
   "job.bed_map_choose": "Selecciona un objeto en el mapa o en la lista.",
-  "job.bed_map_close": "Cerrar mapa de la placa",
   "canvas.recovery_load_slot": "Recuperar cargando la ranura {slot}",
   "canvas.recovery_load_confirm": "¿Iniciar la carga de recuperación desde la ranura {slot}? Compruebe el recorrido y que usa Canvas, no una bobina externa. El firmware puede calentar la boquilla y purgar más material. Espere la confirmación de la impresora.",
   "canvas.recovery_load_sent": "Solicitud enviada. Espere la carga nativa y la confirmación del estado. Sin reintento automático.",
@@ -1167,7 +1166,6 @@
   "spools.spoolman_id_hint": "Vincula esta bobina a una de Spoolman, por su id numérico. Déjalo vacío para no sincronizarla.",
   "spools.invalid_spoolman_id": "El id de Spoolman debe contener solo cifras.",
   "files.list_changed_retry": "La lista cambió durante la carga. Actualiza e inténtalo de nuevo.",
-  "job.bed_map_expand": "Ampliar mapa de la cama",
   "canvas.actions_for_slot": "Acciones para la ranura {slot}",
   "canvas.settings_title": "Ajustes de Canvas",
   "canvas.unload_hint_compact": "Retracción tras el corte: {min}–{max} mm. Requiere reiniciar la impresora.",
@@ -1733,5 +1731,7 @@
   "job.bed_map_printing_layer": "Imprimiendo capa {n} / {total}",
   "job.bed_map_view": "Vista del mapa de la cama",
   "job.bed_map_nozzle": "Boquilla",
-  "job.bed_map_layer_legend": "Trayectoria de capa"
+  "job.bed_map_layer_legend": "Trayectoria de capa",
+  "job.camera_button": "Cámara",
+  "job.no_print": "Sin impresión"
 }

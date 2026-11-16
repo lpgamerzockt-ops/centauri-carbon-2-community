@@ -1148,7 +1148,6 @@
   "job.bed_map_selected": "Ausgewählt",
   "job.bed_map_missing": "{n} Objekte haben keine verwendbare Bettposition. Aus der Liste auswählen.",
   "job.bed_map_choose": "Ein Objekt auf der Karte oder in der Liste auswählen.",
-  "job.bed_map_close": "Bettkarte schließen",
   "canvas.recovery_load_slot": "Wiederherstellen durch Laden von Slot {slot}",
   "canvas.recovery_load_confirm": "Wiederherstellungsladen von Slot {slot} starten? Prüfen, dass der Filamentpfad frei ist und du Canvas verwendest, keinen externen Spool. Die Firmware kann die Düse heizen und zusätzliches Material ausstoßen. Warten, bis der Drucker den neuen Status bestätigt.",
   "canvas.recovery_load_sent": "Anfrage gesendet. Auf das native Laden und eine neue Bestätigung des Druckers warten. Kein automatischer Wiederholungsversuch.",
@@ -1167,7 +1166,6 @@
   "spools.spoolman_id_hint": "Verknüpft diesen Spool anhand seiner numerischen ID mit einem in Spoolman. Leer lassen, um ihn nicht zu synchronisieren.",
   "spools.invalid_spoolman_id": "Die Spoolman-ID darf nur aus Ziffern bestehen.",
   "files.list_changed_retry": "Die Dateiliste hat sich beim Laden geändert. Aktualisieren und erneut versuchen.",
-  "job.bed_map_expand": "Bettkarte erweitern",
   "canvas.actions_for_slot": "Aktionen für Slot {slot}",
   "canvas.settings_title": "Canvas-Einstellungen",
   "canvas.unload_hint_compact": "Zurückziehen nach dem Schnitt: {min}–{max} mm. Erfordert einen Neustart des Druckers.",
@@ -1733,5 +1731,7 @@
   "job.bed_map_printing_layer": "Druckt Schicht {n} / {total}",
   "job.bed_map_view": "Bettkarten-Ansicht",
   "job.bed_map_nozzle": "Düse",
-  "job.bed_map_layer_legend": "Schichtpfad"
+  "job.bed_map_layer_legend": "Schichtpfad",
+  "job.camera_button": "Kamera",
+  "job.no_print": "Kein Druck"
 }
